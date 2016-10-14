@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<meta charset="UTF-8">
+	<title>PubRadio</title>
+
+	<script type="application/javascript" defer="defer">//<![CDATA[
+	( function(window, document) { document.addEventListener( 'DOMContentLoaded', function() {
+
+		'use strict';
+
+		/**
+		 * @param {String} name
+		 */
+		function getCookie(name) {
+			var m = document.cookie.match( new RegExp(
+				'(?:^|;\\s*)' + encodeURIComponent( name ).replace( /([_.!~*'()])/g, '\\$1' ) + '=([^;]*)'
+			) );
+			return m ? decodeURIComponent( m[ 1 ] ) : null;
+		}
+
+		/**
+		 * @param {String} name
+		 * @parma {String} value
+		 * @param {Number} expires
+		 */
+		function setCookie(name, value, expires) {
+			document.cookie =
+				encodeURIComponent( name ) + '=' + encodeURIComponent( value ) +
+				( expires ? '; expires=' + ( new Date( now() + expires * 1e3 ) ).toUTCString() : '' );
+		}
+
+		/**
+		 * @typedef {?{
+		 * 	_correct_: Boolean,
+		 * 	_id_: Number,
+		 * 	_owner_id_: Number,
+		 * 	_artist_: String,
+		 * 	_title_: String,
+		 * 	_key_: String,
+		 * 	_image_: String,
+		 * 	_url_: String
+		 * }} Song
+		 */
+
+		/**
+		 * @param {{
+		 * 	id: Number,
+		 * 	owner_id: Number,
+		 * 	artist: String,
+		 * 	title: String,
+		 * 	url: String
+		 * }} s
+		 * @returns {Song}
+		 */
+		function parseSong(s) {
+			var result;
+
+			if ( s && s[ 'url' ] ) {
+
+				result = {
+					_id_: s[ 'id' ],
+					_owner_id_: s[ 'owner_id' ],
+					_url_: s[ 'url' ],
+					_artist_: ( s[ 'artist' ] || '' ).trim(),
+					_title_: ( s[ 'title' ] || '' ).trim()
+				};
+
+				result._key_ = canonicalize( result._artist_ ) + ' - ' + canonicalize( result._title_ );
+
+			}
+
+			return result;
+		}
+
+		/**
+		 * @param {Array.<{
+		 * 	id: Number,
+		 * 	owner_id: Number,
+		 * 	artist: String,
+		 * 	title: String,
+		 * 	url: String
+		 * }>} items
+		 * @returns {Object.<String, Song>}
+		 */
+		function parseSongs(items) {
+
+			var result = {};
+
+			var s;
+			var i = 0, l = items.length;
+
+			for ( ; i<l; ++i ) {
+
+				s = parseSong( items[ i ] );
+				if ( s ) {
+					result[ s._key_ ] = s;
+				}
+
+			}
+
+			return result;
+
+		}
+
+		/**
+		 * @param {Array.<Array.<{
+		 * 	artist: String,
+		 * 	title: String,
+		 * 	url: String
+		 * }>>} params
+		 */
+		function init(params) {
+
+			nextHash = parseSongs( params[ 0 ] );
+			userHash = parseSongs( params[ 1 ] );
+
+			next();
+
+		}
+
+		/**
+		 */
+		function next() {
+
+			if ( song ) {
+				prevList.push( song );
+			}
+
+			if ( nextList.length ) {
+
+				play( nextList.pop() );
+
+			} else {
+
+				stop();
+
+				queryBroadcast( function(s) {
+
+					var i;
+
+					if ( s ) {
+						if ( s._key_ in prevHash ) s = null;
+						else if ( s._key_ in nextHash ) s = nextHash[ s._key_ ];
+					}
+
+					if ( !s ) {
+
+						var list = [];
+						for ( i in nextHash ) {
+							list.push( nextHash[ i ] );
+						}
+
+						if ( list.length > 0 ) {
+							do {
+								s = list[ floor( random() * list.length ) ];
+							} while ( s._key_ in prevHash );
+						}
+
+					}
+
+					delete nextHash[ s._key_ ];
+					prevHash[ s._key_ ] = s;
+
+					for ( i in nextHash ) break;
+					if ( !i ) {
+						nextHash = prevHash;
+						prevHash = {};
+					}
+
+					nextList.push( s );
+
+					next();
+
+				} );
+
+			}
+
+		}
+
+		/**
+		 */
+		function prev() {
+
+			if ( song ) {
+				nextList.push( song );
+			}
+
+			if ( prevList.length > 0 ) {
+
+				play( prevList.pop() );
+
+			} else {
+
+				stop();
+
+			}
+
+		}
+
+		/**
+		 * @param {Song} s
+		 */
+		function play(s) {
+
+			stop();
+
+			song = s;
+
+			audio = createElement( 'audio' );
+			audio.volume = volumeValue;
+			setAttribute( audio, 'src', s._url_ );
+			setAttribute( audio, 'type', 'audio/mp3' );
+			setAttribute( audio, 'autoplay', 'autoplay' );
+
+			addEventListener( audio, 'canplay', updateAudioLoading );
+			addEventListener( audio, 'playthrough', updateAudioLoading );
+			addEventListener( audio, 'progress', updateAudioBuffer );
+			addEventListener( audio, 'timeupdate', updateAudioProgress );
+			addEventListener( audio, 'pause', updateButtons );
+			addEventListener( audio, 'play', updateButtons );
+			addEventListener( audio, 'error', next );
+			addEventListener( audio, 'ended', next );
+
+			appendChild( body, audio );
+
+			update();
+
+			if ( !s._correct_ ) {
+				correct( s, function(s) {
+					if ( s == song ) updateSong();
+				} );
+			}
+
+		}
+
+		/**
+		 */
+		function stop() {
+
+			if ( audio ) {
+
+				removeChild( audio );
+
+				removeEventListener( audio, 'canplay', updateAudioLoading );
+				removeEventListener( audio, 'playthrough', updateAudioLoading );
+				removeEventListener( audio, 'progress', updateAudioBuffer );
+				removeEventListener( audio, 'timeupdate', updateAudioProgress );
+				removeEventListener( audio, 'pause', updateButtons );
+				removeEventListener( audio, 'play', updateButtons );
+				removeEventListener( audio, 'error', next );
+				removeEventListener( audio, 'ended', next );
+
+				audio.pause();
+				audio = null;
+
+			}
+
+			if ( song ) {
+				song = null;
+			}
+
+			update();
+
+		}
+
+		/**
+		 */
+		function pause() {
+			if ( audio ) {
+				if ( !audio.paused ) {
+					audio.pause();
+				}
+			}
+		}
+
+		function resume() {
+			if ( audio ) {
+				if ( audio.paused ) {
+					audio.play();
+				}
+			} else {
+				next();
+			}
+		}
+
+		/**
+		 */
+		function update() {
+
+			updateSong();
+
+			updateAudioLoading();
+			updateAudioBuffer();
+			updateAudioProgress();
+
+			updateDownload();
+			updateAdd();
+
+			updateButtons();
+
+		}
+
+		/**
+		 */
+		function updateSong() {
+
+			if ( !img || !song || img.src != song._image_ ) {
+				if ( img ) {
+					removeAttribute( img, 'src' );
+					removeChild( img );
+					img = null;
+				}
+				if ( song && song._image_ ) {
+					img = createElement( 'img' );
+					setAttribute( img, 'src', song._image_ );
+					img.style.opacity = 0;
+					img.onload = function() {
+						if ( img == this ) {
+							img.style.opacity = 1;
+							img.style.filter = 'blur(' + max( 0, ( 400 / img.height - 1 ) * 2 ) + 'px)';
+							appendChild( image, img );
+						}
+					};
+				}
+			}
+
+			while ( text.lastChild ) removeChild( text.lastChild );
+
+			var node;
+
+			if ( song && song._artist_ ) {
+
+				node = createElement( 'a' );
+				node.textContent = song._artist_;
+
+				setAttribute( node, 'href', '//vk.com/search?c[section]=audio&c[q]=' + encodeURIComponent( song._artist_ ) + '&c[performer]=1' );
+				setAttribute( node, 'target', '_blank' );
+
+				appendChild( text, node );
+
+			}
+
+			if ( song && song._title_ ) {
+
+				if ( node ) {
+					node = createElement( 'span' );
+					node.textContent = ' – ';
+					appendChild( text, node );
+				}
+
+				node = createElement( 'span' );
+				node.textContent = song._title_;
+				appendChild( text, node );
+
+			}
+
+		}
+
+		/**
+		 */
+		function updateAudioLoading() {
+			progressLoading.style.display = ( !audio || audio.readyState < 3 ? 'block' : 'none' );
+		}
+
+		/**
+		 */
+		function updateAudioBuffer() {
+			var buffer = 0;
+			if ( audio ) {
+				var buffered = audio.buffered;
+				for ( var i = 0; i < buffered.length; ++i ) {
+					buffer = max( buffer, buffered.end( i ) );
+				}
+				buffer /= audio.duration / 100;
+			}
+			progressBuffer.style.width = buffer + '%';
+		}
+
+		/**
+		 */
+		function updateAudioProgress() {
+			if ( audio ) {
+
+				var t = round( audio.currentTime );
+				var m = floor( t % 60 );
+
+				progressHint.textContent =
+				time.textContent = floor( t / 60 ) + ':' + ( m < 10 ? '0' : '' ) + m;
+				progressProgress.style.width = audio.currentTime / audio.duration * 100 + '%';
+
+			} else {
+
+				progressHint.textContent =
+				time.textContent = '';
+				progressProgress.style.width = 0;
+
+			}
+		}
+
+		/**
+		 */
+		function updateVolume(value) {
+			volumeValue = min( max( 0, value ), 1 );
+			volumeProgress.style.width = volumeValue * 100 + '%';
+			volumeHint.textContent = round( volumeValue * 100 ) + '%'
+			if ( audio ) audio.volume = volumeValue;
+			setCookie( 'v', volumeValue, 7 * 24 * 60 * 60 );
+		}
+
+		/**
+		 */
+		function updateDownload() {
+			if ( song ) {
+				setAttribute( btnDownload, 'href', song._url_ );
+			} else {
+				removeAttribute( btnDownload, 'href' );
+			}
+		}
+
+		/**
+		 */
+		function updateAdd() {
+			if ( song && userHash ) {
+				setAttribute( btnAdd, 'data-in', song._key_ in userHash );
+			} else {
+				removeAttribute( btnAdd, 'data-in' );
+			}
+		}
+
+		/**
+		 */
+		function updateButtons() {
+
+			btnPrev.disabled = !audio || prevList.length <= 0;
+
+			btnNext.disabled = !audio;
+
+			btnPause.disabled =
+			btnResume.disabled = !audio || audio.readyState <= 3
+
+			if ( !btnResume.disabled && audio.paused ) {
+
+				btnPause.style.display = 'none';
+				btnResume.style.display = '';
+
+			} else {
+
+				btnResume.style.display = 'none';
+				btnPause.style.display = '';
+
+			}
+
+		}
+
+		/**
+		 * @param {Song} s
+		 * @param {function(Song)} callback
+		 */
+		function correct(s, callback) {
+
+			querySongInfo( s, function(response) {
+				if ( response ) {
+
+					s._correct_ = true;
+
+					if ( response[ 'name' ] ) {
+						s._title_ = response[ 'name' ];
+					}
+
+					if ( response[ 'artist' ] && response[ 'artist' ][ 'name' ] ) {
+						s._artist_ = response[ 'artist' ][ 'name' ];
+					}
+
+					if ( response[ 'album' ] ) {
+						s._image_ = getImage( response[ 'album' ][ 'image' ] );
+					}
+
+					if ( s._image_ ) {
+
+						callback( s );
+
+					} else {
+
+						queryArtistInfo( s, function(response) {
+
+							if ( response ) {
+								s._image_ = getImage( response[ 'image' ] );
+							}
+
+							callback( s );
+
+						} );
+
+					}
+
+				} else {
+					callback( s );
+				}
+			} );
+
+		}
+
+		/**
+		 * @param {Array} list
+		 */
+		function getImage(list) {
+			if ( list && list.length > 0 ) {
+
+				var SIZE = {
+					'small':		0,
+					'medium':		1,
+					'large':		2,
+					'extralarge':	3,
+					'mega':			4
+				};
+
+				list.sort( function(a, b) {
+					return ( ( SIZE[ a[ 'size' ] ] || 0 ) > ( SIZE[ b[ 'size' ] ] || 0 ) ? 1: -1 );
+				} );
+
+				return list.pop()[ '#text' ];
+
+			} else {
+				return null;
+			}
+		}
+
+		/**
+		 * @param {function(?Song=)} callback
+		 */
+		function queryBroadcast(callback) {
+			vk_query(
+
+				'groups.getById', { 'group_id': vk_group_id, 'fields': 'status' },
+
+				function(response) {
+					callback( parseSong( response[ 0 ][ 'status_audio' ] ) );
+				},
+
+				function(e) {
+					callback();
+				}
+
+			);
+		}
+
+		/**
+		 * @param {Song} s
+		 * @param {function(?Song=)} callback
+		 */
+		function querySongInfo(s, callback) {
+			lastFM_query(
+
+				'track.getInfo', { 'artist': s._artist_, 'track': s._title_, 'autocorrect': 1 },
+
+				function(response) {
+					callback( response[ 'track' ] );
+				},
+
+				function(e) {
+					callback();
+				}
+
+			);
+		}
+
+		/**
+		 * @param {Song} s
+		 * @param {function(?Song=)} callback
+		 */
+		function queryArtistInfo(s, callback) {
+			lastFM_query(
+
+				'artist.getInfo', { 'artist': s._artist_ },
+
+				function(response) {
+					callback( response[ 'artist' ] );
+				},
+
+				function(e) {
+					callback();
+				}
+
+			);
+		}
+
+		/**
+		 * @param {Song} s
+		 * @param {function(?Song=)} callback
+		 */
+		function queryAdd(s, callback) {
+			vk_query(
+
+				'audio.add', { 'audio_id': s._id_, 'owner_id': s._owner_id_ },
+
+				function(id) {
+
+					s._id_ = id;
+					s._owner_id_ = vk_viewer_id;
+
+					if ( s._correct_ ) {
+						vk_query( 'audio.edit', { 'audio_id': id, 'owner_id': vk_viewer_id, 'artist': s._artist_, 'title': s._title_ } );
+					}
+
+					userHash[ s._key_ ] = s;
+
+					if ( callback ) callback( s );
+
+				},
+
+				function(e) {
+					if ( callback ) callback();
+				}
+
+			);
+		}
+
+		// VK
+
+		/**
+		 * @param {String} method
+		 * @param {?Object=} params
+		 * @param {function(Object)=} success
+		 * @param {function(Error)=} fail
+		 */
+		function vk_query(method, params, success, fail) {
+
+			var i;
+			var data = {};
+
+			var callback = 'c' + generate();
+
+			for ( i in params ) {
+				data[ i ] = params[ i ];
+			}
+
+			data[ 'callback' ] = callback;
+			data[ 'format' ] = 'json';
+			data[ 'v' ] = '5.58';
+			data[ 'method' ] = method;
+			data[ 'api_id' ] = vk_api_id;
+			data[ 'sig' ] = vk_signature( data );
+			data[ 'sid' ] = vk_sid;
+
+
+			var args = [];
+			for ( i in data ) {
+				args.push( encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
+			}
+
+			var script = createElement( 'script' );
+			setAttribute( script, 'async', 'async' );
+			setAttribute( script, 'src', vk_api_url + '?' + args.join( '&' ) );
+
+			appendChild( head, script );
+
+			script.onerror = function() {
+				removeChild( script );
+				fail( Error( 'io error' ) );
+			};
+
+			window[ callback ] = function(result) {
+
+				removeChild( script );
+				delete window[ callback ];
+
+				if ( result && result[ 'response' ] ) {
+					if ( success ) success( result[ 'response' ] );
+				} else {
+
+					if ( result ) result = result[ 'error' ];
+
+					var e = Error( result && typeof result == 'object' && result[ 'error_msg' ] );
+
+					switch ( result && result[ 'error_code' ] ) {
+
+						case 6:
+						case 9:
+							setTimeout( function() {
+								vk_query( method, params, success, fail );
+							}, 10e3 );
+							break;
+
+						default:
+							if ( fail ) fail( e );
+							break;
+
+					}
+
+				}
+
+			};
+
+		}
+
+		/**
+		 * @param {Object} data
+		 * @returns {String}
+		 */
+		function vk_signature(data) {
+
+			var arr = [];
+			for ( var i in data ) {
+				arr.push( i + '=' + data[ i ] );
+			}
+			arr.sort();
+
+			return md5(
+				( vk_viewer_id > 0 ? vk_viewer_id : '' ) +
+				arr.join( '' ) +
+				vk_secret
+			);
+
+		}
+
+		// LastFM
+
+		/**
+		 * @param {String} method
+		 * @param {?Object=} params
+		 * @param {function(Object)=} success
+		 * @param {function(Error)=} fail
+		 */
+		function lastFM_query(method, params, success, fail) {
+
+			var i;
+			var data = {};
+
+			for ( i in params ) {
+				data[ i ] = params[ i ];
+			}
+
+			data[ 'format' ] = 'json';
+			data[ 'method' ] = method;
+			data[ 'api_key' ] = lastFM_api_key;
+			if ( lastFM_token ) {
+				data[ 'token' ] = lastFM_token;
+			}
+			if ( lastFM_sk ) {
+				data[ 'sk' ] = lastFM_sk;
+			}
+			if ( lastFM_secret ) {
+				data[ 'api_sig' ] = lastFM_signature( data );
+			}
+
+			var args = [];
+			for ( i in data ) {
+				args.push( encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
+			}
+
+			var	xhr = new XMLHttpRequest();
+			xhr.open( 'GET', lastFM_api_url + '?' + args.join( '&' ), true );
+			xhr.send();
+
+			if ( xhr.overrideMimeType ) xhr.overrideMimeType( 'application/json' );
+
+			xhr.onload = function() {
+				try {
+
+					var result = parseJSON( xhr.responseText );
+
+					if ( !result || result[ 'error' ] ) {
+
+						var e = Error( result && typeof result == 'object' && result[ 'message' ] );
+
+						switch ( result[ 'error' ] ) {
+
+							case 8:
+							case 11:
+							case 16:
+							case 29:
+								setTimeout( function() {
+									lastFM_query( method, params, success, fail );
+								}, 10e3 );
+								break;
+
+							default:
+								if ( fail ) fail( e );
+								break;
+
+						}
+
+					} else {
+						if ( success ) success( result );
+					}
+
+				} catch ( e ) {
+					if ( fail ) fail( Error( e ) );
+				}
+			};
+
+			xhr.onerror = function() {
+				if ( fail ) fail( Error( xhr.responseText ) );
+			};
+
+		}
+
+		/**
+		 * @param {Object} data
+		 * @returns {String}
+		 */
+		function lastFM_signature(data) {
+
+			var arr = [];
+			for ( var i in data ) {
+				arr.push( i + data[ i ] );
+			}
+			arr.sort();
+
+			return md5( arr.join( '' ) + lastFM_secret );
+
+		}
+
+		// vars
+
+		var	String = window.String,
+			Math = window.Math,
+			JSON = window.JSON,
+			Error = window.Error,
+
+			Uint32Array = window[ 'Uint32Array' ] || Array,
+			XMLHttpRequest = window[ 'XDomainRequest' ] || window.XMLHttpRequest,
+
+			FunctionPrototype = Function.prototype,
+
+			/** @type {Element} */
+			documentElement = document.documentElement,
+			/** @type {{ getRandomValues: (function(ArrayBufferView)) }} */
+			crypto = window[ 'crypto' ],
+
+			/** @type {function(Function, Number):Number} */
+			setTimeout = window.setTimeout,
+			/** @type {function(String):String} */
+			encodeURIComponent = window.encodeURIComponent,
+			/** @type {function(String):String} */
+			decodeURIComponent = window.decodeURIComponent,
+
+			/** @type {function():Number} */
+			random = Math.random,
+			/** @type {function(Number):Number} */
+			floor = Math.floor,
+			/** @type {function(Number):Number} */
+			round = Math.round,
+			/** @type {function(...Number):Number} */
+			min = Math.min,
+			/** @type {function(...Number):Number} */
+			max = Math.max,
+			/** @type {function(String):*} */
+			parseJSON = JSON.parse,
+
+			/** @type {function():Number} */
+			now = Date.now || function() {
+				return ( new Date() ).getTime();
+			},
+
+			/** @type {function(Object, ...*):*} */
+			FunctionCall = FunctionPrototype.call,
+			/** @type {function(Object):Function} */
+			FunctionBind = FunctionPrototype.bind,
+
+			/** @type {function(Function, Object):Function} */
+			bind = ( FunctionBind
+				? FunctionCall.bind( FunctionBind )
+				: function(func, context) {
+					return function() {
+						return func.apply( context, arguments );
+					}
+				}
+			),
+			/** @type {function(Function):Function} */
+			unbind = ( FunctionBind
+				? FunctionBind.bind( FunctionCall )
+				: function(func) {
+					return function() {
+						return FunctionCall.apply( func, arguments );
+					};
+				}
+			),
+
+			/** @type {function(Element, String, Function)} */
+			addEventListener = unbind( documentElement.addEventListener ),
+			/** @type {function(Element, String, Function)} */
+			removeEventListener = unbind( documentElement.removeEventListener ),
+			/** @type {function(Element, String, *)} */
+			setAttribute = unbind( documentElement.setAttribute ),
+			/** @type {function(Element, String)} */
+			removeAttribute = unbind( documentElement.removeAttribute ),
+			/** @type {function(Element, Element)} */
+			appendChild = unbind( documentElement.appendChild ),
+			/** @type {function(Element)} */
+			removeChild = function(node) { var parent = node.parentNode; if ( parent ) parent.removeChild( node ) },
+
+			/** @type {function(String):*} */
+			createTextNode = bind( document.createTextNode, document ),
+			/** @type {function(String):*} */
+			createElement = bind( document.createElement, document ),
+			/** @type {function(String):*} */
+			getElementById = bind( document.getElementById, document ),
+			/** @type {function(String):*} */
+			querySelector = bind( document.querySelector, document ),
+			/** @type {function(Element, String):*} */
+			querySelectorChild = unbind( documentElement.querySelector );
+
+		/** @type {function():String} */
+		var	generate = ( crypto && Uint32Array
+				? ( function() {
+					var	buf = new Uint32Array( 1 );
+					return function() {
+						crypto.getRandomValues( buf );
+						return String( buf[ 0 ] );
+					}
+				}() )
+				: function() {
+					return String( Math.abs( now() * random() & 0xFFFFFFFF ) );
+				}
+			);
+
+		/** @type {function(String):String} */
+		var	canonicalize = ( function() {
+
+				function replace(m) {
+					return replacers[ m ];
+				}
+
+				var chars = {
+
+					'a': 'àáâãäåāăąаӑӓӕѧѩ',
+					'b': 'б',
+					'c': 'çćĉċčцџҵҽҿ',
+					'd': 'ðďđдђԁԃ',
+					'e': 'èéêëēėęěəеёѐєӗәӛѣѥэӭ',
+					'f': 'фѳ',
+					'g': 'ĝğġģгѓґғҕӷӻԍ',
+					'h': 'ĥħхҳӽӿ',
+					'i': 'ìíîïīįiıийіїјѝҋӏӣӥjĵĳ',
+					'k': 'ķкќқҝҟҡӄԛԟ',
+					'l': 'ļłлљӆԉԓԕԡᴫ',
+					'm': 'мӎ',
+					'n': 'ñńņňнњңҥӈӊԋԣᵸ',
+					'o': 'òóôõöøőơоҩӧөӫѡѻѽѿ',
+					'p': 'пҧԥ',
+					'r': 'ŕřрҏԗ',
+					's': 'ßśŝşșšþсҫ',
+					't': 'ţťтҭԏ',
+					'u': 'ùúûüūŭůűųưуўүұӯӱӳѫѭѹ',
+					'v': 'вԝwŵ',
+					'y': 'ýŷÿыӹ',
+					'z': 'źżžзѕҙӟӡԅԇԑ',
+					'ae': 'æ',
+					'oe': 'œ',
+					'ks': 'ѯ',
+					'ps': 'ѱ',
+					'zh': 'жҗӂӝ',
+					'ch': 'чћҷҹһӌӵԧҁ',
+					'sh': 'шщ',
+					'iu': 'юѵѷ',
+					'ia': 'яԙ'
+
+				};
+
+				var replacers = {};
+				var regexp = '';
+
+				var c, s, arr;
+
+				for ( c in chars ) {
+
+					regexp += chars[ c ];
+
+					arr = chars[ c ].split( '' );
+					for ( s in arr ) {
+						replacers[ arr[ s ] ] = c;
+					}
+
+				}
+
+				regexp = new RegExp( '[' + regexp + ']', 'g' );
+
+				return function(n) {
+					return n.toLowerCase().replace( regexp, replace ).replace( /\W+/g, '' );
+				};
+
+			}() );
+
+		/** @type {function(String):String} */
+		var md5 = ( function() {
+
+				/**
+				 * @param txt {String}
+				 * @return {String}
+				 */
+				function md5(txt) {
+
+					var bin = txt2bin( txt );
+					var blen = bin.length << 3;
+
+					var block = bin2block( bin );
+					var len = block.length;
+
+					block[ blen >>> 5 ] |= 0x80 << ( blen & 31 );
+					block[ ( ( ( blen + 64 ) >>> 9 ) << 4 ) + 14 ] = blen;
+
+					var x0;
+					var x1;
+					var x2;
+					var x3;
+					var x4;
+					var x5;
+					var x6;
+					var x7;
+					var x8;
+					var x9;
+					var xA;
+					var xB;
+					var xC;
+					var xD;
+					var xE;
+					var xF;
+
+					var a =  1732584193;
+					var b = - 271733879;
+					var c = -1732584194;
+					var d =   271733878;
+
+					var aa;
+					var bb;
+					var cc;
+					var dd;
+
+					var i = 0;
+
+					do {
+
+						aa = a;
+						bb = b;
+						cc = c;
+						dd = d;
+
+						x0 = block[ i      ];
+						x1 = block[ i +  1 ];
+						x2 = block[ i +  2 ];
+						x3 = block[ i +  3 ];
+						x4 = block[ i +  4 ];
+						x5 = block[ i +  5 ];
+						x6 = block[ i +  6 ];
+						x7 = block[ i +  7 ];
+						x8 = block[ i +  8 ];
+						x9 = block[ i +  9 ];
+						xA = block[ i + 10 ];
+						xB = block[ i + 11 ];
+						xC = block[ i + 12 ];
+						xD = block[ i + 13 ];
+						xE = block[ i + 14 ];
+						xF = block[ i + 15 ];
+
+						a = ff( a, b, c, d, x0,  7, - 680876936 );
+						d = ff( d, a, b, c, x1, 12, - 389564586 );
+						c = ff( c, d, a, b, x2, 17,   606105819 );
+						b = ff( b, c, d, a, x3, 22, -1044525330 );
+						a = ff( a, b, c, d, x4,  7, - 176418897 );
+						d = ff( d, a, b, c, x5, 12,  1200080426 );
+						c = ff( c, d, a, b, x6, 17, -1473231341 );
+						b = ff( b, c, d, a, x7, 22, -  45705983 );
+						a = ff( a, b, c, d, x8,  7,  1770035416 );
+						d = ff( d, a, b, c, x9, 12, -1958414417 );
+						c = ff( c, d, a, b, xA, 17, -     42063 );
+						b = ff( b, c, d, a, xB, 22, -1990404162 );
+						a = ff( a, b, c, d, xC,  7,  1804603682 );
+						d = ff( d, a, b, c, xD, 12, -  40341101 );
+						c = ff( c, d, a, b, xE, 17, -1502002290 );
+						b = ff( b, c, d, a, xF, 22,  1236535329 );
+
+						a = gg( a, b, c, d, x1,  5, - 165796510 );
+						d = gg( d, a, b, c, x6,  9, -1069501632 );
+						c = gg( c, d, a, b, xB, 14,   643717713 );
+						b = gg( b, c, d, a, x0, 20, - 373897302 );
+						a = gg( a, b, c, d, x5,  5, - 701558691 );
+						d = gg( d, a, b, c, xA,  9,    38016083 );
+						c = gg( c, d, a, b, xF, 14, - 660478335 );
+						b = gg( b, c, d, a, x4, 20, - 405537848 );
+						a = gg( a, b, c, d, x9,  5,   568446438 );
+						d = gg( d, a, b, c, xE,  9, -1019803690 );
+						c = gg( c, d, a, b, x3, 14, - 187363961 );
+						b = gg( b, c, d, a, x8, 20,  1163531501 );
+						a = gg( a, b, c, d, xD,  5, -1444681467 );
+						d = gg( d, a, b, c, x2,  9, -  51403784 );
+						c = gg( c, d, a, b, x7, 14,  1735328473 );
+						b = gg( b, c, d, a, xC, 20, -1926607734 );
+
+						a = hh( a, b, c, d, x5,  4, -    378558 );
+						d = hh( d, a, b, c, x8, 11, -2022574463 );
+						c = hh( c, d, a, b, xB, 16,  1839030562 );
+						b = hh( b, c, d, a, xE, 23, -  35309556 );
+						a = hh( a, b, c, d, x1,  4, -1530992060 );
+						d = hh( d, a, b, c, x4, 11,  1272893353 );
+						c = hh( c, d, a, b, x7, 16, - 155497632 );
+						b = hh( b, c, d, a, xA, 23, -1094730640 );
+						a = hh( a, b, c, d, xD,  4,   681279174 );
+						d = hh( d, a, b, c, x0, 11, - 358537222 );
+						c = hh( c, d, a, b, x3, 16, - 722521979 );
+						b = hh( b, c, d, a, x6, 23,    76029189 );
+						a = hh( a, b, c, d, x9,  4, - 640364487 );
+						d = hh( d, a, b, c, xC, 11, - 421815835 );
+						c = hh( c, d, a, b, xF, 16,   530742520 );
+						b = hh( b, c, d, a, x2, 23, - 995338651 );
+
+						a = ii( a, b, c, d, x0,  6, - 198630844 );
+						d = ii( d, a, b, c, x7, 10,  1126891415 );
+						c = ii( c, d, a, b, xE, 15, -1416354905 );
+						b = ii( b, c, d, a, x5, 21, -  57434055 );
+						a = ii( a, b, c, d, xC,  6,  1700485571 );
+						d = ii( d, a, b, c, x3, 10, -1894986606 );
+						c = ii( c, d, a, b, xA, 15, -   1051523 );
+						b = ii( b, c, d, a, x1, 21, -2054922799 );
+						a = ii( a, b, c, d, x8,  6,  1873313359 );
+						d = ii( d, a, b, c, xF, 10, -  30611744 );
+						c = ii( c, d, a, b, x6, 15, -1560198380 );
+						b = ii( b, c, d, a, xD, 21,  1309151649 );
+						a = ii( a, b, c, d, x4,  6, - 145523070 );
+						d = ii( d, a, b, c, xB, 10, -1120210379 );
+						c = ii( c, d, a, b, x2, 15,   718787259 );
+						b = ii( b, c, d, a, x9, 21, - 343485551 );
+
+						a = add( a, aa );
+						b = add( b, bb );
+						c = add( c, cc );
+						d = add( d, dd );
+
+						i += 16;
+
+					} while ( i < len );
+
+					return hex( a ) + hex( b ) + hex( c ) + hex( d );
+
+				}
+
+				function ff(a, b, c, d, x, s, t) {
+					return cmn( ( b & c ) | ( ( ~b ) & d ), a, b, x, s, t );
+				}
+
+				function gg(a, b, c, d, x, s, t) {
+					return cmn( ( b & d ) | ( c & ( ~d ) ), a, b, x, s, t );
+				}
+
+				function hh(a, b, c, d, x, s, t) {
+					return cmn( b ^ c ^ d, a, b, x, s, t );
+				}
+
+				function ii(a, b, c, d, x, s, t) {
+					return cmn( c ^ ( b | ( ~d ) ), a, b, x, s, t );
+				}
+
+				function cmn(q, a, b, x, s, t) {
+					a = add( add( a, q ), add( x, t ) );
+					return add( ( a << s ) | ( a >>> ( 32 - s ) ), b );
+				}
+
+				function add(a, b) {
+					return ( a + b ) & 0xFFFFFFFF;
+				}
+
+				/**
+				 * @param {Number} n
+				 * @returns {String}
+				 */
+				function hex(n) {
+
+					var r = [];
+
+					for ( var i = 0; i < 32; i += 8 ) {
+						r.push( chars[ ( n >>> ( i + 4 ) ) & 0x0F ] );
+						r.push( chars[ ( n >>>   i       ) & 0x0F ] );
+					}
+
+					return r.join( '' );
+
+				}
+
+				var chars = '0123456789abcdef'.split( '' );
+
+				var TextEncoder = window[ 'TextEncoder' ];
+				var ArrayBuffer = window[ 'ArrayBuffer' ];
+
+				/** @type {function(String):Uint8Array} */
+				var txt2bin = TextEncoder ? bind( TextEncoder.prototype[ 'encode' ], new TextEncoder() ) : function(txt) {
+
+					var bin = [];
+
+					var c, j = 0, i = 0, l = txt.length;
+
+					for ( ; i<l; ++j ) {
+
+						c = txt.charCodeAt( j );
+
+						if ( c < 0x80 ) {
+
+							bin[ i++ ] = c;
+
+						} else if ( c < 0x800 ) {
+
+							bin[ i++ ] = 0xC0 | (   c >>  6          );
+							bin[ i++ ] = 0x80 | (   c         & 0x3F );
+
+						} else if ( c < 0xD800 || c >= 0xE000 ) {
+
+							bin[ i++ ] = 0xE0 | (   c >> 12          );
+							bin[ i++ ] = 0x80 | ( ( c >>  6 ) & 0x3F );
+							bin[ i++ ] = 0x80 | (   c         & 0x3F );
+
+						} else {
+
+							c = 0x10000 + ( ( ( c & 0x3FF ) << 10 ) | ( txt.charCodeAt( ++j ) & 0x3FF ) );
+
+							bin[ i++ ] = 0xF0 | (   c >> 18          );
+							bin[ i++ ] = 0x80 | ( ( c >> 12 ) & 0x3F );
+							bin[ i++ ] = 0x80 | ( ( c >>  6 ) & 0x3F );
+							bin[ i++ ] = 0x80 | (   c         & 0x3F );
+
+						}
+
+					}
+
+					return bin;
+
+				};
+
+				/** @type {function(Uint8Array):Uint32Array} */
+				var bin2block = ( ArrayBuffer
+					? function(bin) {
+
+						var l = bin.length;
+
+						var buff = new ArrayBuffer( l + 64 - ( l & 63 ) );
+						var bin8 = new Uint8Array( buff );
+
+						bin8.set( bin );
+
+						return new Uint32Array( buff );
+
+					}
+					: function(bin) {
+
+						var result = [];
+
+						var i = 0, l = bin.length;
+						for ( ; i<l; ++i ) {
+							result[ i >> 2 ] |= bin[ i ] << ( ( i & 3 ) << 3 );
+						}
+
+						i = 0; l = result.length;
+
+						for ( ; i<l; ++i ) {
+							result[ i ] >>>= 0;
+						}
+
+						l += 16 - ( l & 15 );
+						for ( ; i<l; ++i ) {
+							result[ i ] = 0;
+						}
+
+						return result;
+
+					}
+				);
+
+				if ( md5( 'hello' ) != '5d41402abc4b2a76b9719d911017c592' ) {
+					add = function(a, b) {
+						var lsw = ( a & 0xFFFF ) + ( b & 0xFFFF );
+						var msw = ( a >> 16 ) + ( b >> 16 ) + ( lsw >> 16 );
+						return ( msw << 16 ) | ( lsw & 0xFFFF );
+					};
+				}
+
+				return md5;
+
+			}() );
+
+		var	vk_api_url,
+			vk_api_id,
+			vk_secret,
+			vk_sid,
+			vk_viewer_id,
+
+			lastFM_api_url,
+			lastFM_api_key,
+			lastFM_token,
+			lastFM_sk,
+			lastFM_secret,
+
+			vk_group_id,
+
+			/** @type {Song} */
+			song,
+
+			/** @type {Object.<String, Song>} */
+			userHash,
+			/** @type {Object.<String, Song>} */
+			nextHash,
+			/** @type {Object.<String, Song>} */
+			prevHash = {},
+
+			/** @type {Array.<Song>} */
+			prevList = [],
+			/** @type {Array.<Song>} */
+			nextList = [],
+
+			/** @type {Number} */
+			volumeValue = 0,
+
+			/** @type {HTMLMediaElement} */
+			audio,
+
+			head = querySelector( 'head' ),
+			body = querySelector( 'body' ),
+
+			img,
+
+			image = getElementById( 'image' ),
+			text = getElementById( 'text' ),
+			info = getElementById( 'info' ),
+			time = getElementById( 'time' ),
+			btnAdd = getElementById( 'add' ),
+			btnDownload = getElementById( 'download' ),
+
+			progress = getElementById( 'progress' ),
+			progressStatic = querySelectorChild( progress, '.static' ),
+			progressLoading = querySelectorChild( progress, '.loading' ),
+			progressBuffer = querySelectorChild( progress, '.buffer' ),
+			progressProgress = querySelectorChild( progress, '.progress' ),
+			progressHint = querySelectorChild( progress, '.hint' ),
+
+			volume = getElementById( 'volume' ),
+			volumeStatic = querySelectorChild( volume, '.static' ),
+			volumeProgress = querySelectorChild( volume, '.progress' ),
+			volumeHint = querySelectorChild( volume, '.hint' ),
+
+			btnPrev = getElementById( 'prev' ),
+			btnPause = getElementById( 'pause' ),
+			btnResume = getElementById( 'resume' ),
+			btnNext = getElementById( 'next' );
+
+		( function() {
+
+			updateVolume( getCookie( 'v' ) || 1 );
+
+			volume.onclick = function() {
+
+				var rect = volumeStatic.getBoundingClientRect();
+				updateVolume( ( event.clientX - rect.left ) / ( rect.right - rect.left ) );
+
+			};
+			volume.onmousedown = function() {
+
+				setAttribute( volume, 'data-active', true );
+
+				volume.onclick();
+
+				addEventListener( documentElement, 'mousemove', volume.onclick );
+				addEventListener( documentElement, 'mouseup', function mouseup() {
+
+					removeEventListener( documentElement, 'mouseup', mouseup );
+					removeEventListener( documentElement, 'mousemove', volume.onclick );
+
+					removeAttribute( volume, 'data-active' );
+
+				} );
+
+			};
+
+			progress.onclick = function() {
+
+				if ( !audio ) return;
+
+				var rect = progressStatic.getBoundingClientRect();
+				audio.currentTime = audio.duration * ( event.clientX - rect.left ) / ( rect.right - rect.left );
+
+			};
+			progress.onmousedown = function() {
+
+				setAttribute( progress, 'data-active', true );
+
+				addEventListener( documentElement, 'mousemove', progress.onclick );
+				addEventListener( documentElement, 'mouseup', function mouseup() {
+
+					removeEventListener( documentElement, 'mouseup', mouseup );
+					removeEventListener( documentElement, 'mousemove', progress.onclick );
+
+					removeAttribute( progress, 'data-active' );
+
+				} );
+
+			};
+
+			btnAdd.onclick = function() {
+
+				if ( !song || song._key_ in userHash ) return;
+
+				btnAdd.disabled = true;
+				queryAdd( song, function(s) {
+					btnAdd.disabled = false;
+					updateAdd();
+				} );
+
+			};
+
+			btnPrev.onclick = prev;
+			btnPause.onclick = pause;
+			btnResume.onclick = resume;
+			btnNext.onclick = next;
+
+			update();
+
+		}() );
+
+		( function() {
+
+			var	parameters = {};
+
+			var o, arr = window.location.hash.replace( /^#?\??/, '' ).split( '&' );
+			for ( o in arr ) {
+				o = arr[ o ].split( '=' );
+				parameters[ decodeURIComponent( o[ 0 ] ) ] = decodeURIComponent( o[ 1 ] );
+			}
+
+			vk_api_url =		parameters[ 'api_url' ];
+			vk_api_id =			parameters[ 'api_id' ];
+			vk_secret =			parameters[ 'secret' ];
+			vk_sid =			parameters[ 'sid' ];
+			vk_viewer_id =		parameters[ 'viewer_id' ];
+
+			vk_group_id =		parameters[ 'vk_group_id' ];
+			lastFM_api_url =	parameters[ 'lastFM_api_url' ];
+			lastFM_api_key =	parameters[ 'lastFM_api_key' ];
+
+			try {
+
+				init( parseJSON( parameters[ 'api_result' ] )[ 'response' ] );
+
+			} catch ( e ) {
+
+				vk_query(
+
+					'execute', { code: 'return[API.audio.get({"owner_id":-' + vk_group_id + '}).items,API.audio.get({"owner_id":' + vk_viewer_id + '}).items];' },
+
+					init,
+
+					function(e) {
+
+						// TODO: error
+
+					}
+
+				);
+
+			}
+
+		}() );
+
+	} ) }( window, document ) );
+	//]]></script>
+
+	<style type="text/css">/*<![CDATA[*/
+
+		@keyframes loading {
+			from { background-position-x: 0 }
+			to { background-position-x: 9px }
+		}
+
+		html, body {
+			-webkit-font-smoothing: subpixel-antialiased;
+			-moz-osx-font-smoothing: auto;
+			font: normal 13px/13px -apple-system, BlinkMacSystemFont, Roboto, Open Sans, Helvetica Neue, sans-serif;
+		}
+
+		* {
+			border: 0;
+			outline: 0;
+			padding: 0;
+			margin: 0;
+			transition: 100ms;
+			-webkit-user-select: none;
+			-moz-user-select: none;
+			-ms-user-select: none;
+			user-select: none;
+		}
+
+		a, button:not( :disabled ) {
+			cursor: pointer;
+		}
+
+		audio {
+			display: none;
+			position: absolute;
+		}
+
+		.container {
+			width: 100%;
+			text-align: center;
+		}
+
+		.container > * {
+			display: inline-block;
+		}
+
+		#player {
+			width: 370px;
+			padding: 8px 5px;
+			cursor: default;
+			background: rgba( 255, 255, 255, 0.95 );
+			box-shadow: 0 0 20px 10px rgba( 255, 255, 255, 0.3 );
+			margin: 150px 0 10px;
+			line-height: 20px;
+		}
+
+		#player > * {
+			display: inline-block;
+			vertical-align: middle;
+			margin: 0 5px;
+		}
+
+		#player > .left {
+			width: 290px;
+			text-align: left;
+		}
+
+		#player > .right {
+			width: 60px;
+			text-align: right;
+		}
+
+		#image {
+			height: 400px;
+			position: absolute;
+			z-index: -1000;
+		}
+
+		#image > * {
+			width: auto;
+			height: 100%;
+		}
+
+		#text {
+			display: inline-block;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			vertical-align: middle;
+		}
+
+		#text > * {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			padding: 0 2px;
+		}
+
+		#text a {
+			display: inline-block;
+			color: #2a5885;
+			text-decoration: none;
+			font-weight: 500;
+			max-width: 50%;
+			vertical-align: middle;
+		}
+
+		#text a:hover {
+			text-decoration: underline;
+			max-width: 100%;
+		}
+
+		.slider {
+			width: 100%;
+			height: 2px;
+			position: relative;
+			padding: 6px 0;
+		}
+
+		.slider:hover {
+			cursor: pointer;
+		}
+
+		.slider > * {
+			width: 100%;
+			height: 2px;
+			position: absolute;
+		}
+
+		.slider .static {
+			background-color: #e1e8ee;
+		}
+
+		.slider .loading {
+			background: url( "http://vk.com/images/audio_progress.png" ) 0 0 repeat;
+			animation: loading 400ms linear infinite;
+		}
+
+		.slider .buffer {
+			background-color: #b8c7d7;
+		}
+
+		.slider .progress, .slider .cursor {
+			background-color: #577ca1;
+			transition: width 0s;
+		}
+
+		.slider .progress > * {
+			position: absolute;
+			right: 0;
+		}
+
+		.slider .cursor {
+			width: 2px;
+			height: 2px;
+			border-radius: 50%;
+			float: right;
+			opacity: 0;
+		}
+
+		.slider[data-active] .cursor,
+		.slider:hover .cursor {
+			width: 8px;
+			height: 8px;
+			margin: -3px -4px 0 0;
+			opacity: 1;
+		}
+
+		.slider .hint {
+			width: 36px;
+			height: auto;
+			text-align: center;
+			font-size: 11px;
+			color: #4d627d;
+			padding: 4px 6px 3px;
+			pointer-events: none;
+			background: #d2dbe4;
+			border-radius: 2px;
+			margin: -36px -24px 0 0;
+			float: right;
+			opacity: 0;
+		}
+
+		.slider .hint:after {
+			content: "";
+			top: 100%;
+			left: 50%;
+			border: 5px solid transparent;
+			border-top-color: #d2dbe4;
+			height: 0;
+			width: 0;
+			position: absolute;
+			pointer-events: none;
+			margin-left: -5px;
+		}
+
+		.slider[data-active] .hint,
+		.slider:hover .hint:not( :empty ) {
+			opacity: 1;
+		}
+
+		#time {
+			display: inline;
+			height: 20px;
+			color: #818d99;
+		}
+
+		#player:hover #time {
+			display: none;
+		}
+
+		#info a {
+			width: 13px;
+			height: 13px;
+			opacity: 0.7;
+			margin-left: 12px;
+		}
+
+		#info a:hover {
+			opacity: 1;
+		}
+
+		#add {
+			display: none;
+			background: url( "http://vk.com/images/icons/common.png" ) 0 0 no-repeat;
+		}
+
+		#add[data-in="true"] {
+			background-position-y: -14px;
+		}
+
+		#download {
+			background: url( "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAYAAABy6+R8AAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAAHjanVNnVFPpFj333vRCS4iAlEtvUhUIIFJCi4AUkSYqIQkQSoghodkVUcERRUUEG8igiAOOjoCMFVEsDIoK2AfkIaKOg6OIisr74Xuja9a89+bN/rXXPues852zzwfACAyWSDNRNYAMqUIeEeCDx8TG4eQuQIEKJHAAEAizZCFz/SMBAPh+PDwrIsAHvgABeNMLCADATZvAMByH/w/qQplcAYCEAcB0kThLCIAUAEB6jkKmAEBGAYCdmCZTAKAEAGDLY2LjAFAtAGAnf+bTAICd+Jl7AQBblCEVAaCRACATZYhEAGg7AKzPVopFAFgwABRmS8Q5ANgtADBJV2ZIALC3AMDOEAuyAAgMADBRiIUpAAR7AGDIIyN4AISZABRG8lc88SuuEOcqAAB4mbI8uSQ5RYFbCC1xB1dXLh4ozkkXKxQ2YQJhmkAuwnmZGTKBNA/g88wAAKCRFRHgg/P9eM4Ors7ONo62Dl8t6r8G/yJiYuP+5c+rcEAAAOF0ftH+LC+zGoA7BoBt/qIl7gRoXgugdfeLZrIPQLUAoOnaV/Nw+H48PEWhkLnZ2eXk5NhKxEJbYcpXff5nwl/AV/1s+X48/Pf14L7iJIEyXYFHBPjgwsz0TKUcz5IJhGLc5o9H/LcL//wd0yLESWK5WCoU41EScY5EmozzMqUiiUKSKcUl0v9k4t8s+wM+3zUAsGo+AXuRLahdYwP2SycQWHTA4vcAAPK7b8HUKAgDgGiD4c93/+8//UegJQCAZkmScQAAXkQkLlTKsz/HCAAARKCBKrBBG/TBGCzABhzBBdzBC/xgNoRCJMTCQhBCCmSAHHJgKayCQiiGzbAdKmAv1EAdNMBRaIaTcA4uwlW4Dj1wD/phCJ7BKLyBCQRByAgTYSHaiAFiilgjjggXmYX4IcFIBBKLJCDJiBRRIkuRNUgxUopUIFVIHfI9cgI5h1xGupE7yAAygvyGvEcxlIGyUT3UDLVDuag3GoRGogvQZHQxmo8WoJvQcrQaPYw2oefQq2gP2o8+Q8cwwOgYBzPEbDAuxsNCsTgsCZNjy7EirAyrxhqwVqwDu4n1Y8+xdwQSgUXACTYEd0IgYR5BSFhMWE7YSKggHCQ0EdoJNwkDhFHCJyKTqEu0JroR+cQYYjIxh1hILCPWEo8TLxB7iEPENyQSiUMyJ7mQAkmxpFTSEtJG0m5SI+ksqZs0SBojk8naZGuyBzmULCAryIXkneTD5DPkG+Qh8lsKnWJAcaT4U+IoUspqShnlEOU05QZlmDJBVaOaUt2ooVQRNY9aQq2htlKvUYeoEzR1mjnNgxZJS6WtopXTGmgXaPdpr+h0uhHdlR5Ol9BX0svpR+iX6AP0dwwNhhWDx4hnKBmbGAcYZxl3GK+YTKYZ04sZx1QwNzHrmOeZD5lvVVgqtip8FZHKCpVKlSaVGyovVKmqpqreqgtV81XLVI+pXlN9rkZVM1PjqQnUlqtVqp1Q61MbU2epO6iHqmeob1Q/pH5Z/YkGWcNMw09DpFGgsV/jvMYgC2MZs3gsIWsNq4Z1gTXEJrHN2Xx2KruY/R27iz2qqaE5QzNKM1ezUvOUZj8H45hx+Jx0TgnnKKeX836K3hTvKeIpG6Y0TLkxZVxrqpaXllirSKtRq0frvTau7aedpr1Fu1n7gQ5Bx0onXCdHZ4/OBZ3nU9lT3acKpxZNPTr1ri6qa6UbobtEd79up+6Ynr5egJ5Mb6feeb3n+hx9L/1U/W36p/VHDFgGswwkBtsMzhg8xTVxbzwdL8fb8VFDXcNAQ6VhlWGX4YSRudE8o9VGjUYPjGnGXOMk423GbcajJgYmISZLTepN7ppSTbmmKaY7TDtMx83MzaLN1pk1mz0x1zLnm+eb15vft2BaeFostqi2uGVJsuRaplnutrxuhVo5WaVYVVpds0atna0l1rutu6cRp7lOk06rntZnw7Dxtsm2qbcZsOXYBtuutm22fWFnYhdnt8Wuw+6TvZN9un2N/T0HDYfZDqsdWh1+c7RyFDpWOt6azpzuP33F9JbpL2dYzxDP2DPjthPLKcRpnVOb00dnF2e5c4PziIuJS4LLLpc+Lpsbxt3IveRKdPVxXeF60vWdm7Obwu2o26/uNu5p7ofcn8w0nymeWTNz0MPIQ+BR5dE/C5+VMGvfrH5PQ0+BZ7XnIy9jL5FXrdewt6V3qvdh7xc+9j5yn+M+4zw33jLeWV/MN8C3yLfLT8Nvnl+F30N/I/9k/3r/0QCngCUBZwOJgUGBWwL7+Hp8Ib+OPzrbZfay2e1BjKC5QRVBj4KtguXBrSFoyOyQrSH355jOkc5pDoVQfujW0Adh5mGLw34MJ4WHhVeGP45wiFga0TGXNXfR3ENz30T6RJZE3ptnMU85ry1KNSo+qi5qPNo3ujS6P8YuZlnM1VidWElsSxw5LiquNm5svt/87fOH4p3iC+N7F5gvyF1weaHOwvSFpxapLhIsOpZATIhOOJTwQRAqqBaMJfITdyWOCnnCHcJnIi/RNtGI2ENcKh5O8kgqTXqS7JG8NXkkxTOlLOW5hCepkLxMDUzdmzqeFpp2IG0yPTq9MYOSkZBxQqohTZO2Z+pn5mZ2y6xlhbL+xW6Lty8elQfJa7OQrAVZLQq2QqboVFoo1yoHsmdlV2a/zYnKOZarnivN7cyzytuQN5zvn//tEsIS4ZK2pYZLVy0dWOa9rGo5sjxxedsK4xUFK4ZWBqw8uIq2Km3VT6vtV5eufr0mek1rgV7ByoLBtQFr6wtVCuWFfevc1+1dT1gvWd+1YfqGnRs+FYmKrhTbF5cVf9go3HjlG4dvyr+Z3JS0qavEuWTPZtJm6ebeLZ5bDpaql+aXDm4N2dq0Dd9WtO319kXbL5fNKNu7g7ZDuaO/PLi8ZafJzs07P1SkVPRU+lQ27tLdtWHX+G7R7ht7vPY07NXbW7z3/T7JvttVAVVN1WbVZftJ+7P3P66Jqun4lvttXa1ObXHtxwPSA/0HIw6217nU1R3SPVRSj9Yr60cOxx++/p3vdy0NNg1VjZzG4iNwRHnk6fcJ3/ceDTradox7rOEH0x92HWcdL2pCmvKaRptTmvtbYlu6T8w+0dbq3nr8R9sfD5w0PFl5SvNUyWna6YLTk2fyz4ydlZ19fi753GDborZ752PO32oPb++6EHTh0kX/i+c7vDvOXPK4dPKy2+UTV7hXmq86X23qdOo8/pPTT8e7nLuarrlca7nuer21e2b36RueN87d9L158Rb/1tWeOT3dvfN6b/fF9/XfFt1+cif9zsu72Xcn7q28T7xf9EDtQdlD3YfVP1v+3Njv3H9qwHeg89HcR/cGhYPP/pH1jw9DBY+Zj8uGDYbrnjg+OTniP3L96fynQ89kzyaeF/6i/suuFxYvfvjV69fO0ZjRoZfyl5O/bXyl/erA6xmv28bCxh6+yXgzMV70VvvtwXfcdx3vo98PT+R8IH8o/2j5sfVT0Kf7kxmTk/8EA5jz/GMzLdsAAAAgY0hSTQAAeiUAAICDAAD5/wAAgOkAAHUwAADqYAAAOpgAABdvkl/FRgAAAJZJREFUeNpi/P//PwMMJDYuRHDQwPz6eEYYm4mBDDAcNTEmNCz4T45NjKRomF8fz8jEwMDAcHnzZHliNMDUMf7//58hsXEhw+XNk5V0fXPv4tGgrOubew+uCZoaGC5vniyu65v7AosGCV3f3JdQ5yFCb359PIOub+7Ly5snS6JpkETWwMDAwMDw//9/rDihYcF/XHKAAQAdFltWzzE8UQAAAABJRU5ErkJggg==" ) center no-repeat;
+		}
+
+		#player:hover #add[data-in] {
+			display: inline-block;
+		}
+
+		#player:hover #download[href] {
+			display: inline-block;
+		}
+
+		#controls button {
+			background: #577ca1;
+			width: 30px;
+			height: 30px;
+			border-radius: 50%;
+			text-align: center;
+			margin: 4px;
+			box-shadow: 0 0 8px 8px rgba( 255, 255, 255, 0.8 );
+		}
+
+		#controls button:disabled {
+			background: #a0a0a0;
+		}
+
+		#controls button .icon {
+			width: 14px;
+			height: 14px;
+			background: url( "http://vk.com/images/icons/head_icons.png" ) no-repeat;
+			margin: 8px;
+			opacity: 0.7;
+		}
+
+		#controls button:hover:not( :disabled ) .icon {
+			opacity: 1;
+		}
+
+		#controls #prev .icon {
+			background-position: -32px -78px;
+		}
+
+		#controls #pause .icon {
+			background-position: -16px -78px;
+		}
+
+		#controls #resume .icon {
+			background-position: 2px -78px;
+		}
+
+		#controls #next .icon {
+			background-position: -46px -78px;
+		}
+
+	/*]]>*/</style>
+
+	<link href="http://fonts.googleapis.com/css?family=Roboto:400,500&subset=cyrillic" rel="stylesheet" />
+
+</head>
+<body>
+	<div class="container" id="image">
+	</div>
+	<div class="container">
+		<div id="player">
+			<div id="text" class="left">
+			</div><div id="info" class="right">
+				<a id="download" download="download"></a><a id="add"></a>
+				<time id="time"></time>
+			</div><div id="progress" class="left slider">
+				<div class="static"></div>
+				<div class="loading"></div>
+				<div class="buffer"></div>
+				<div class="progress">
+					<div class="cursor"></div>
+					<div class="hint"></div>
+				</div>
+			</div><div id="volume" class="right slider">
+				<div class="static"></div>
+				<div class="progress">
+					<div class="cursor"></div>
+					<div class="hint"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="container">
+		<div id="controls">
+			<button id="prev">
+				<div class="icon"></div>
+			</button><button id="pause">
+				<div class="icon"></div>
+			</button><button id="resume">
+				<div class="icon"></div>
+			</button><button id="next">
+				<div class="icon"></div>
+			</button>
+		</div>
+	</div>
+</body>
+</html>
