@@ -121,6 +121,13 @@
 		}
 
 		/**
+		 * @returns {Boolean}
+		 */
+		function hasAudio() {
+			return audio && getAttribute( audio, 'src' );
+		}
+
+		/**
 		 */
 		function next() {
 
@@ -209,10 +216,11 @@
 			song = s;
 
 			audio = createElement( 'audio' );
+
 			audio.volume = volumeValue;
-			setAttribute( audio, 'src', s._url_ );
+
 			setAttribute( audio, 'type', 'audio/mp3' );
-			setAttribute( audio, 'autoplay', 'autoplay' );
+			setAttribute( audio, 'src', s._url_ );
 
 			addEventListener( audio, 'canplay', updateAudioLoading );
 			addEventListener( audio, 'playthrough', updateAudioLoading );
@@ -224,6 +232,8 @@
 			addEventListener( audio, 'ended', next );
 
 			appendChild( body, audio );
+
+			audio.play();
 
 			update();
 
@@ -239,7 +249,7 @@
 		 */
 		function stop() {
 
-			if ( audio ) {
+			if ( hasAudio() ) {
 
 				removeChild( audio );
 
@@ -253,6 +263,9 @@
 				removeEventListener( audio, 'ended', next );
 
 				audio.pause();
+
+				removeAttribute( audio, 'src' );
+
 				audio = null;
 
 			}
@@ -268,7 +281,7 @@
 		/**
 		 */
 		function pause() {
-			if ( audio ) {
+			if ( hasAudio() ) {
 				if ( !audio.paused ) {
 					audio.pause();
 				}
@@ -276,7 +289,7 @@
 		}
 
 		function resume() {
-			if ( audio ) {
+			if ( hasAudio() ) {
 				if ( audio.paused ) {
 					audio.play();
 				}
@@ -306,7 +319,7 @@
 		 */
 		function updateSong() {
 
-			if ( !img || !song || img.src != song._image_ ) {
+			if ( !img || !song || getAttribute( img, 'src' ) != song._image_ ) {
 				if ( img ) {
 					removeAttribute( img, 'src' );
 					removeChild( img );
@@ -362,13 +375,14 @@
 		 */
 		function updateAudioLoading() {
 			progressLoading.style.display = ( !audio || audio.readyState < 3 ? 'block' : 'none' );
+			updateButtons();
 		}
 
 		/**
 		 */
 		function updateAudioBuffer() {
 			var buffer = 0;
-			if ( audio ) {
+			if ( hasAudio() ) {
 				var buffered = audio.buffered;
 				for ( var i = 0; i < buffered.length; ++i ) {
 					buffer = max( buffer, buffered.end( i ) );
@@ -381,7 +395,7 @@
 		/**
 		 */
 		function updateAudioProgress() {
-			if ( audio ) {
+			if ( hasAudio() ) {
 
 				var t = round( audio.currentTime );
 				var m = floor( t % 60 );
@@ -883,6 +897,8 @@
 			addEventListener = unbind( documentElement.addEventListener ),
 			/** @type {function(Element, String, Function)} */
 			removeEventListener = unbind( documentElement.removeEventListener ),
+			/** @type {function(Element, String):*} */
+			getAttribute = function(e, name) { return e.getAttribute( name ) || '' },
 			/** @type {function(Element, String, *)} */
 			setAttribute = unbind( documentElement.setAttribute ),
 			/** @type {function(Element, String)} */
@@ -892,8 +908,6 @@
 			/** @type {function(Element)} */
 			removeChild = function(node) { var parent = node.parentNode; if ( parent ) parent.removeChild( node ) },
 
-			/** @type {function(String):*} */
-			createTextNode = bind( document.createTextNode, document ),
 			/** @type {function(String):*} */
 			createElement = bind( document.createElement, document ),
 			/** @type {function(String):*} */
@@ -926,7 +940,7 @@
 
 				var chars = {
 
-					'a': 'àáâãäåāăąаӑӓӕѧѩ',
+					'a': 'àáâãäåāăąаӑӓѧѩ',
 					'b': 'б',
 					'c': 'çćĉċčцџҵҽҿ',
 					'd': 'ðďđдђԁԃ',
@@ -934,7 +948,8 @@
 					'f': 'фѳ',
 					'g': 'ĝğġģгѓґғҕӷӻԍ',
 					'h': 'ĥħхҳӽӿ',
-					'i': 'ìíîïīįiıийіїјѝҋӏӣӥjĵĳ',
+					'i': 'ìíîïīįiıийіїјѝҋӏӣӥ',
+					'j': 'ĵ',
 					'k': 'ķкќқҝҟҡӄԛԟ',
 					'l': 'ļłлљӆԉԓԕԡᴫ',
 					'm': 'мӎ',
@@ -948,7 +963,7 @@
 					'v': 'вԝwŵ',
 					'y': 'ýŷÿыӹ',
 					'z': 'źżžзѕҙӟӡԅԇԑ',
-					'ae': 'æ',
+					'ae': 'æӕ',
 					'oe': 'œ',
 					'ks': 'ѯ',
 					'ps': 'ѱ',
@@ -956,7 +971,8 @@
 					'ch': 'чћҷҹһӌӵԧҁ',
 					'sh': 'шщ',
 					'iu': 'юѵѷ',
-					'ia': 'яԙ'
+					'ia': 'яԙ',
+					'ij': 'ĳ'
 
 				};
 
@@ -993,15 +1009,6 @@
 				 */
 				function md5(txt) {
 
-					var bin = txt2bin( txt );
-					var blen = bin.length << 3;
-
-					var block = bin2block( bin );
-					var len = block.length;
-
-					block[ blen >>> 5 ] |= 0x80 << ( blen & 31 );
-					block[ ( ( ( blen + 64 ) >>> 9 ) << 4 ) + 14 ] = blen;
-
 					var x0;
 					var x1;
 					var x2;
@@ -1030,6 +1037,15 @@
 					var dd;
 
 					var i = 0;
+
+					var bin = txt2bin( txt );
+					var blen = bin.length << 3;
+
+					var block = bin2block( bin );
+					var len = block.length;
+
+					block[ blen >>> 5 ] |= 0x80 << ( blen & 31 );
+					block[ ( ( ( blen + 64 ) >>> 9 ) << 4 ) + 14 ] = blen;
 
 					do {
 
