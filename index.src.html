@@ -1,9 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ru" lang="ru">
 <head>
 
-	<meta charset="UTF-8">
-	<title>PubRadio</title>
+	<title>VK GROUP RADIO</title>
+
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+	<meta http-equiv="Content-Style-Type" content="text/css" />
+	<meta http-equiv="Content-Script-Type" content="text/javascript" />
+
+	<meta http-equiv="Content-Language" content="ru" />
+
+	<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+
+	<meta name="author" content="BlooDHounD" />
+
+	<link rel="publisher author creator" href="https://plus.google.com/100541322208500221597" />
 
 	<script type="application/javascript" defer="defer">//<![CDATA[
 	( function(window, document) { document.addEventListener( 'DOMContentLoaded', function() {
@@ -385,35 +397,43 @@
 				}
 			}
 
-			while ( text.lastChild ) removeChild( text.lastChild );
-
 			var node;
 
-			if ( song && song._artist_ ) {
+			while ( node = text.lastChild ) removeChild( node );
 
-				node = createElement( 'a' );
-				node.textContent = song._artist_;
+			if ( song ) {
 
-				setAttribute( node, 'href', '//vk.com/search?c[section]=audio&c[q]=' + encodeURIComponent( song._artist_ ) + '&c[performer]=1' );
-				setAttribute( node, 'target', '_blank' );
+				if ( song._artist_ ) {
 
-				appendChild( text, node );
+					node = createElement( 'a' );
+					node.textContent = song._artist_;
 
-			}
+					setAttribute( node, 'href', '//vk.com/search?c[section]=audio&c[q]=' + encodeURIComponent( song._artist_ ) + '&c[performer]=1' );
+					setAttribute( node, 'target', '_blank' );
 
-			if ( song && song._title_ ) {
-
-				if ( node ) {
-					node = createElement( 'span' );
-					node.textContent = ' – ';
 					appendChild( text, node );
+
+				} else {
+					node = null;
 				}
 
-				node = createElement( 'span' );
-				node.textContent = song._title_;
-				appendChild( text, node );
+				if ( song._title_ ) {
+
+					if ( node ) {
+						node = createElement( 'span' );
+						node.textContent = ' – ';
+						appendChild( text, node );
+					}
+
+					node = createElement( 'span' );
+					node.textContent = song._title_;
+					appendChild( text, node );
+
+				}
 
 			}
+
+			vk_client( text.textContent );
 
 		}
 
