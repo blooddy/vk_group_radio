@@ -1,9 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ru" lang="ru">
 <head>
 
-	<meta charset="UTF-8">
-	<title>PubRadio</title>
+	<title>VK GROUP RADIO</title>
+
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+	<meta http-equiv="Content-Style-Type" content="text/css" />
+	<meta http-equiv="Content-Script-Type" content="text/javascript" />
+
+	<meta http-equiv="Content-Language" content="ru" />
+
+	<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+
+	<meta name="author" content="BlooDHounD" />
+
+	<link rel="publisher author creator" href="https://plus.google.com/100541322208500221597" />
 
 	<script type="application/javascript" defer="defer">//<![CDATA[
 	( function(window, document) { document.addEventListener( 'DOMContentLoaded', function() {
@@ -22,7 +34,7 @@
 
 		/**
 		 * @param {String} name
-		 * @parma {String} value
+		 * @param {String|Number|Boolean} value
 		 * @param {Number} expires
 		 */
 		function setCookie(name, value, expires) {
@@ -102,6 +114,52 @@
 
 			return result;
 
+		}
+
+		/**
+		 * @param {Number} settings
+		 * @param {Function} callback
+		 */
+		function access(settings, callback) {
+			if ( settings & 8 ) {
+
+				callback();
+
+			} else {
+
+				var handleMessage = function(event) {
+					var data = event && event.data;
+					if ( data.substr( 0, 6 ) == vk_window ) {
+						try {
+							data = parseJSON( data.substr( 6 ) );
+						} catch ( e ) {
+							data = null;
+						}
+						if ( data && data[ 0 ] == 'runCallback' ) {
+							clearTimeout( id );
+							data = data[ 1 ];
+							if ( data ) {
+								data = data[ 0 ];
+								if ( data && data[ 0 ] == 'onSettingsChanged' ) {
+									clearTimeout( id );
+									removeEventListener( window, 'message', handleMessage );
+									access( data[ 1 ], callback );
+								}
+							}
+						}
+					}
+				};
+
+				var id = setTimeout( function() {
+					removeEventListener( window, 'message', handleMessage );
+					callback();
+				}, 1e3 );
+
+				addEventListener( window, 'message', handleMessage );
+
+				vk_client( 'showSettingsBox', 8 );
+
+			}
 		}
 
 		/**
@@ -339,35 +397,43 @@
 				}
 			}
 
-			while ( text.lastChild ) removeChild( text.lastChild );
-
 			var node;
 
-			if ( song && song._artist_ ) {
+			while ( node = text.lastChild ) removeChild( node );
 
-				node = createElement( 'a' );
-				node.textContent = song._artist_;
+			if ( song ) {
 
-				setAttribute( node, 'href', '//vk.com/search?c[section]=audio&c[q]=' + encodeURIComponent( song._artist_ ) + '&c[performer]=1' );
-				setAttribute( node, 'target', '_blank' );
+				if ( song._artist_ ) {
 
-				appendChild( text, node );
+					node = createElement( 'a' );
+					node.textContent = song._artist_;
 
-			}
+					setAttribute( node, 'href', '//vk.com/search?c[section]=audio&c[q]=' + encodeURIComponent( song._artist_ ) + '&c[performer]=1' );
+					setAttribute( node, 'target', '_blank' );
 
-			if ( song && song._title_ ) {
-
-				if ( node ) {
-					node = createElement( 'span' );
-					node.textContent = ' – ';
 					appendChild( text, node );
+
+				} else {
+					node = null;
 				}
 
-				node = createElement( 'span' );
-				node.textContent = song._title_;
-				appendChild( text, node );
+				if ( song._title_ ) {
+
+					if ( node ) {
+						node = createElement( 'span' );
+						node.textContent = ' – ';
+						appendChild( text, node );
+					}
+
+					node = createElement( 'span' );
+					node.textContent = song._title_;
+					appendChild( text, node );
+
+				}
 
 			}
+
+			vk_client( text.textContent );
 
 		}
 
@@ -418,7 +484,7 @@
 		function updateVolume(value) {
 			volumeValue = min( max( 0, value ), 1 );
 			volumeProgress.style.width = volumeValue * 100 + '%';
-			volumeHint.textContent = round( volumeValue * 100 ) + '%'
+			volumeHint.textContent = round( volumeValue * 100 ) + '%';
 			if ( audio ) audio.volume = volumeValue;
 			setCookie( 'v', volumeValue, 7 * 24 * 60 * 60 );
 		}
@@ -452,7 +518,7 @@
 			btnNext.disabled = !audio;
 
 			btnPause.disabled =
-			btnResume.disabled = !audio || audio.readyState <= 3
+			btnResume.disabled = !audio || audio.readyState <= 3;
 
 			if ( !btnResume.disabled && audio.paused ) {
 
@@ -611,7 +677,7 @@
 
 				function(id) {
 
-					s._id_ = id;
+					s._id_ = /** @type {Number} */ id;
 					s._owner_id_ = vk_viewer_id;
 
 					if ( s._correct_ ) {
@@ -635,16 +701,24 @@
 
 		/**
 		 * @param {String} method
+		 * @param {...*} arg
+		 */
+		function vk_client(method, arg) {
+			window.parent[ 'postMessage' ]( vk_window + encodeJSON( arguments ) , '*' );
+		}
+
+		/**
+		 * @param {String} method
 		 * @param {?Object=} params
 		 * @param {function(Object)=} success
 		 * @param {function(Error)=} fail
 		 */
 		function vk_query(method, params, success, fail) {
 
+			var callback = 'vk' + generate();
+
 			var i;
 			var data = {};
-
-			var callback = 'c' + generate();
 
 			for ( i in params ) {
 				data[ i ] = params[ i ];
@@ -863,6 +937,8 @@
 			max = Math.max,
 			/** @type {function(String):*} */
 			parseJSON = JSON.parse,
+			/** @type {function(*):String} */
+			encodeJSON = JSON.stringify,
 
 			/** @type {function():Number} */
 			now = Date.now || function() {
@@ -893,9 +969,9 @@
 				}
 			),
 
-			/** @type {function(Element, String, Function)} */
+			/** @type {function(EventTarget, String, Function)} */
 			addEventListener = unbind( documentElement.addEventListener ),
-			/** @type {function(Element, String, Function)} */
+			/** @type {function(EventTarget, String, Function)} */
 			removeEventListener = unbind( documentElement.removeEventListener ),
 			/** @type {function(Element, String):*} */
 			getAttribute = function(e, name) { return e.getAttribute( name ) || '' },
@@ -1186,8 +1262,10 @@
 					var r = [];
 
 					for ( var i = 0; i < 32; i += 8 ) {
-						r.push( chars[ ( n >>> ( i + 4 ) ) & 0x0F ] );
-						r.push( chars[ ( n >>>   i       ) & 0x0F ] );
+						r.push(
+							chars[ ( n >>> ( i + 4 ) ) & 0x0F ],
+							chars[ ( n >>>   i       ) & 0x0F ]
+						);
 					}
 
 					return r.join( '' );
@@ -1281,14 +1359,6 @@
 					}
 				);
 
-				if ( md5( 'hello' ) != '5d41402abc4b2a76b9719d911017c592' ) {
-					add = function(a, b) {
-						var lsw = ( a & 0xFFFF ) + ( b & 0xFFFF );
-						var msw = ( a >> 16 ) + ( b >> 16 ) + ( lsw >> 16 );
-						return ( msw << 16 ) | ( lsw & 0xFFFF );
-					};
-				}
-
 				return md5;
 
 			}() );
@@ -1306,6 +1376,7 @@
 			lastFM_secret,
 
 			vk_group_id,
+			vk_window,
 
 			/** @type {Song} */
 			song,
@@ -1450,27 +1521,29 @@
 			lastFM_api_url =	parameters[ 'lastFM_api_url' ];
 			lastFM_api_key =	parameters[ 'lastFM_api_key' ];
 
-			try {
+			vk_window =			( window[ 'name' ] || '' ).replace( /^fXD/, '' ) + ':';
 
-				init( parseJSON( parameters[ 'api_result' ] )[ 'response' ] );
+			access( parameters[ 'api_settings' ], function() {
+				try {
 
-			} catch ( e ) {
+					init( parseJSON( parameters[ 'api_result' ] )[ 'response' ] );
 
-				vk_query(
+				} catch ( e ) {
 
-					'execute', { code: 'return[API.audio.get({"owner_id":-' + vk_group_id + '}).items,API.audio.get({"owner_id":' + vk_viewer_id + '}).items];' },
+					vk_query(
 
-					init,
+						'execute', { code: 'return[API.audio.get({"owner_id":-' + vk_group_id + '}).items,API.audio.get({"owner_id":' + vk_viewer_id + '}).items];' },
 
-					function(e) {
+						init,
 
-						// TODO: error
+						function(e) {
+							// TODO: error
+						}
 
-					}
+					);
 
-				);
-
-			}
+				}
+			} );
 
 		}() );
 
@@ -1488,6 +1561,25 @@
 			-webkit-font-smoothing: subpixel-antialiased;
 			-moz-osx-font-smoothing: auto;
 			font: normal 13px/13px -apple-system, BlinkMacSystemFont, Roboto, Open Sans, Helvetica Neue, sans-serif;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+		}
+
+		.container {
+			position: absolute;
+			min-width: 100%;
+			min-height: 100%;
+			text-align: center;
+		}
+
+		.container > * {
+			position: absolute;
+			left: -100%;
+			bottom: -100%;
+			top: -100%;
+			right: -100%;
+			margin: auto;
 		}
 
 		* {
@@ -1511,44 +1603,46 @@
 			position: absolute;
 		}
 
-		.container {
+		#content {
 			width: 100%;
-			text-align: center;
+			height: 125px;
+			max-width: 400px;
 		}
 
-		.container > * {
-			display: inline-block;
+		#content > * {
+			margin: 10px;
 		}
 
 		#player {
-			width: 370px;
-			padding: 8px 5px;
 			cursor: default;
 			background: rgba( 255, 255, 255, 0.95 );
 			box-shadow: 0 0 20px 10px rgba( 255, 255, 255, 0.3 );
-			margin: 150px 0 10px;
 			line-height: 20px;
+			text-align: center;
 		}
 
-		#player > * {
-			display: inline-block;
+		#player table {
+			width: 100%;
+			padding: 8px 5px;
+		}
+
+		#player td {
 			vertical-align: middle;
-			margin: 0 5px;
+			padding: 0 5px;
 		}
 
-		#player > .left {
-			width: 290px;
+		#player .left {
+			max-width: 0;
 			text-align: left;
 		}
 
-		#player > .right {
+		#player .right {
 			width: 60px;
+			min-width: 60px;
 			text-align: right;
 		}
 
 		#image {
-			height: 400px;
-			position: absolute;
 			z-index: -1000;
 		}
 
@@ -1558,13 +1652,9 @@
 		}
 
 		#text {
-			display: inline-block;
-			width: 100%;
-			height: 100%;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
-			vertical-align: middle;
 		}
 
 		#text > * {
@@ -1609,7 +1699,7 @@
 		}
 
 		.slider .loading {
-			background: url( "http://vk.com/images/audio_progress.png" ) 0 0 repeat;
+			background: url( "//vk.com/images/audio_progress.png" ) 0 0 repeat;
 			animation: loading 400ms linear infinite;
 		}
 
@@ -1678,7 +1768,6 @@
 
 		#time {
 			display: inline;
-			height: 20px;
 			color: #818d99;
 		}
 
@@ -1690,7 +1779,7 @@
 			width: 13px;
 			height: 13px;
 			opacity: 0.7;
-			margin-left: 12px;
+			margin: 0 0 -2px 12px;
 		}
 
 		#info a:hover {
@@ -1699,7 +1788,7 @@
 
 		#add {
 			display: none;
-			background: url( "http://vk.com/images/icons/common.png" ) 0 0 no-repeat;
+			background: url( "//vk.com/images/icons/common.png" ) 0 0 no-repeat;
 		}
 
 		#add[data-in="true"] {
@@ -1733,9 +1822,10 @@
 		}
 
 		#controls button .icon {
+			display: block;
 			width: 14px;
 			height: 14px;
-			background: url( "http://vk.com/images/icons/head_icons.png" ) no-repeat;
+			background: url( "//vk.com/images/icons/head_icons.png" ) no-repeat;
 			margin: 8px;
 			opacity: 0.7;
 		}
@@ -1762,46 +1852,58 @@
 
 	/*]]>*/</style>
 
-	<link href="http://fonts.googleapis.com/css?family=Roboto:400,500&subset=cyrillic" rel="stylesheet" />
+	<link href="//fonts.googleapis.com/css?family=Roboto:400,500&subset=cyrillic" rel="stylesheet" />
 
 </head>
 <body>
-	<div class="container" id="image">
-	</div>
+	<div id="image" class="container"></div>
 	<div class="container">
-		<div id="player">
-			<div id="text" class="left">
-			</div><div id="info" class="right">
-				<a id="download" download="download"></a><a id="add"></a>
-				<time id="time"></time>
-			</div><div id="progress" class="left slider">
-				<div class="static"></div>
-				<div class="loading"></div>
-				<div class="buffer"></div>
-				<div class="progress">
-					<div class="cursor"></div>
-					<div class="hint"></div>
-				</div>
-			</div><div id="volume" class="right slider">
-				<div class="static"></div>
-				<div class="progress">
-					<div class="cursor"></div>
-					<div class="hint"></div>
-				</div>
+		<div id="content">
+			<div id="player">
+				<table>
+					<tbody>
+						<tr>
+							<td class="left" id="text"></td>
+							<td class="right" id="info">
+								<a id="download" download="download"></a><a id="add"></a><time id="time"></time>
+							</td>
+						</tr>
+						<tr>
+							<td class="left">
+								<div id="progress" class="slider">
+									<div class="static"></div>
+									<div class="loading"></div>
+									<div class="buffer"></div>
+									<div class="progress">
+										<div class="cursor"></div>
+										<div class="hint"></div>
+									</div>
+								</div>
+							</td>
+							<td class="right">
+								<div id="volume" class="slider">
+									<div class="static"></div>
+									<div class="progress">
+										<div class="cursor"></div>
+										<div class="hint"></div>
+									</div>
+								</div>
+							</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
-		</div>
-	</div>
-	<div class="container">
-		<div id="controls">
-			<button id="prev">
-				<div class="icon"></div>
-			</button><button id="pause">
-				<div class="icon"></div>
-			</button><button id="resume">
-				<div class="icon"></div>
-			</button><button id="next">
-				<div class="icon"></div>
-			</button>
+			<div id="controls">
+				<button id="prev">
+					<span class="icon"></span>
+				</button><button id="pause">
+					<span class="icon"></span>
+				</button><button id="resume">
+					<span class="icon"></span>
+				</button><button id="next">
+					<span class="icon"></span>
+				</button>
+			</div>
 		</div>
 	</div>
 </body>
