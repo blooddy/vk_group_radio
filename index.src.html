@@ -701,10 +701,12 @@
 
 		/**
 		 * @param {String} method
-		 * @param {...*} arg
+		 * @param {...*} args
 		 */
-		function vk_client(method, arg) {
-			window.parent[ 'postMessage' ]( vk_window + encodeJSON( arguments ) , '*' );
+		function vk_client(method, args) {
+			args = slice( arguments );
+			method = args.shift();
+			window.parent[ 'postMessage' ]( vk_window + encodeJSON( [ method, args ] ), '*' );
 		}
 
 		/**
@@ -906,10 +908,12 @@
 			Math = window.Math,
 			JSON = window.JSON,
 			Error = window.Error,
+			Array = window.Array,
 
 			Uint32Array = window[ 'Uint32Array' ] || Array,
 			XMLHttpRequest = window[ 'XDomainRequest' ] || window.XMLHttpRequest,
 
+			ArrayPrototype = Array.prototype,
 			FunctionPrototype = Function.prototype,
 
 			/** @type {Element} */
@@ -968,6 +972,9 @@
 				}
 			),
 
+			/** @type {function(Object,Number=,Number=):Array} */
+			slice = unbind( ArrayPrototype.slice ),
+
 			/** @type {function(EventTarget, String, Function)} */
 			addEventListener = unbind( documentElement.addEventListener ),
 			/** @type {function(EventTarget, String, Function)} */
@@ -1013,7 +1020,6 @@
 					return replacers[ m ];
 				}
 
-				//{a:"àáâãäåāăąаӑӓѧѩ",b:"б",c:"çćĉċčцџҵҽҿ",d:"ðďđдђԁԃ",e:"èéêëēėęěəеёѐєӗәӛѣѥэӭ",f:"фѳ",g:"ĝğġģгѓґғҕӷӻԍ",h:"ĥħхҳӽӿ",i:"ìíîïīįiıийіїјѝҋӏӣӥ",j:"ĵ",k:"ķкќқҝҟҡӄԛԟ",l:"ļłлљӆԉԓԕԡᴫ",m:"мӎ",n:"ñńņňнњңҥӈӊԋԣᵸ",o:"òóôõöøőơоҩӧөӫѡѻѽѿ",p:"пҧԥ",r:"ŕřрҏԗ",s:"ßśŝşșšþсҫ",t:"ţťтҭԏ",u:"ùúûüūŭůűųưуўүұӯӱӳѫѭѹ",v:"вԝwŵ",y:"ýŷÿыӹ",z:"źżžзѕҙӟӡԅԇԑ",ae:"æӕ",oe:"œ",ks:"ѯ",ps:"ѱ",zh:"жҗӂӝ",ch:"чћҷҹһӌӵԧҁ",sh:"шщ",iu:"юѵѷ",ia:"яԙ",ij:"ĳ"}
 				var chars = {
 
 					'a': 'àáâãäåāăąаӑӓѧѩ',
@@ -1512,16 +1518,6 @@
 				parameters[ decodeURIComponent( o[ 0 ] ) ] = decodeURIComponent( o[ 1 ] );
 			}
 
-			parameters[ 'api_url' ] =			'https://api.vk.com/api.php';
-			parameters[ 'api_id' ] =			'5654277';
-			parameters[ 'secret' ] =			'8efe9a6d38';
-			parameters[ 'sid' ] =				'339f1a21d8fc92daee9b154d7c6d08df1524a74a7d5975aa5eff624da7e98abeea9c491840f5dea29e788';
-			parameters[ 'viewer_id' ] =			'782510';
-
-			parameters[ 'vk_group_id' ] =		'34963172';
-			parameters[ 'lastFM_api_url' ] =	'https://ws.audioscrobbler.com/2.0/';
-			parameters[ 'lastFM_api_key' ] =	'a0dbc1bb69b84085c32c101e5e149667';
-
 			vk_api_url =		parameters[ 'api_url' ];
 			vk_api_id =			parameters[ 'api_id' ];
 			vk_secret =			parameters[ 'secret' ];
@@ -1735,7 +1731,7 @@
 		}
 
 		.slider .loading {
-			background: url( "http://vk.com/images/audio_progress.png" ) 0 0 repeat;
+			background: url( "//vk.com/images/audio_progress.png" ) 0 0 repeat;
 			animation: loading 400ms linear infinite;
 		}
 
@@ -1824,7 +1820,7 @@
 
 		#add {
 			display: none;
-			background: url( "http://vk.com/images/icons/common.png" ) 0 0 no-repeat;
+			background: url( "//vk.com/images/icons/common.png" ) 0 0 no-repeat;
 		}
 
 		#add[data-in="true"] {
@@ -1861,7 +1857,7 @@
 			display: block;
 			width: 14px;
 			height: 14px;
-			background: url( "http://vk.com/images/icons/head_icons.png" ) no-repeat;
+			background: url( "//vk.com/images/icons/head_icons.png" ) no-repeat;
 			margin: 8px;
 			opacity: 0.7;
 		}
@@ -1888,7 +1884,7 @@
 
 	/*]]>*/</style>
 
-	<link href="http://fonts.googleapis.com/css?family=Roboto:400,500&subset=cyrillic" rel="stylesheet" />
+	<link href="//fonts.googleapis.com/css?family=Roboto:400,500&subset=cyrillic" rel="stylesheet" />
 
 </head>
 <body>
