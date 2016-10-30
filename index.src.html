@@ -18,7 +18,7 @@
 	<link rel="publisher author creator" href="https://plus.google.com/100541322208500221597" />
 
 	<script type="application/javascript" defer="defer">//<![CDATA[
-	( function(window, document) { document.addEventListener( 'DOMContentLoaded', function() {
+	( function(window, document, undefined) { document.addEventListener( 'DOMContentLoaded', function() {
 
 		'use strict';
 
@@ -29,7 +29,7 @@
 			var m = document.cookie.match( new RegExp(
 				'(?:^|;\\s*)' + encodeURIComponent( name ).replace( /([_.!~*'()])/g, '\\$1' ) + '=([^;]*)'
 			) );
-			return m ? decodeURIComponent( m[ 1 ] ) : null;
+			return m && decodeURIComponent( m[ 1 ] );
 		}
 
 		/**
@@ -133,7 +133,7 @@
 						try {
 							data = parseJSON( data.substr( 6 ) );
 						} catch ( e ) {
-							data = null;
+							data = undefined;
 						}
 						if ( data && data[ 0 ] == 'runCallback' ) {
 							clearTimeout( id );
@@ -206,7 +206,7 @@
 					var i;
 
 					if ( s ) {
-						if ( s._key_ in prevHash ) s = null;
+						if ( s._key_ in prevHash ) s = undefined;
 						else if ( s._key_ in nextHash ) s = nextHash[ s._key_ ];
 					}
 
@@ -324,12 +324,12 @@
 
 				removeAttribute( audio, 'src' );
 
-				audio = null;
+				audio = undefined;
 
 			}
 
 			if ( song ) {
-				song = null;
+				song = undefined;
 			}
 
 			update();
@@ -381,7 +381,7 @@
 				if ( img ) {
 					removeAttribute( img, 'src' );
 					removeChild( img );
-					img = null;
+					img = undefined;
 				}
 				if ( song && song._image_ ) {
 					img = createElement( 'img' );
@@ -414,7 +414,7 @@
 					appendChild( text, node );
 
 				} else {
-					node = null;
+					node = undefined;
 				}
 
 				if ( song._title_ ) {
@@ -603,7 +603,7 @@
 				return list.pop()[ '#text' ];
 
 			} else {
-				return null;
+				return undefined;
 			}
 		}
 
