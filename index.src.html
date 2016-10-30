@@ -741,7 +741,6 @@
 			var script = createElement( 'script' );
 			setAttribute( script, 'async', 'async' );
 			setAttribute( script, 'src', vk_api_url + '?' + args.join( '&' ) );
-
 			appendChild( head, script );
 
 			script.onerror = function() {
@@ -1377,6 +1376,7 @@
 
 			vk_group_id,
 			vk_window,
+			google_analytics,
 
 			/** @type {Song} */
 			song,
@@ -1521,6 +1521,7 @@
 			lastFM_api_url =	parameters[ 'lastFM_api_url' ];
 			lastFM_api_key =	parameters[ 'lastFM_api_key' ];
 
+			google_analytics =	parameters[ 'google_analytics' ];
 			vk_window =			( window[ 'name' ] || '' ).replace( /^fXD/, '' ) + ':';
 
 			access( parameters[ 'api_settings' ], function() {
@@ -1546,6 +1547,30 @@
 			} );
 
 		}() );
+
+		if ( google_analytics ) {
+
+			var q = [];
+
+			var ga = function() {
+				q.push( arguments );
+			};
+
+			var script = createElement( 'script' );
+			setAttribute( script, 'async', 'async' );
+			setAttribute( script, 'src', '//www.google-analytics.com/analytics.js' );
+			appendChild( head, script );
+
+			ga( 'create', google_analytics, 'auto' );
+			ga( 'send', 'pageview' );
+
+			ga[ 'q' ] = q;
+			ga[ 'l' ] = now();
+
+			window[ 'ga' ] = ga;
+			window[ 'GoogleAnalyticsObject' ] = 'ga';
+
+		}
 
 	} ) }( window, document ) );
 	//]]></script>
