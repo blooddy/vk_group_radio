@@ -22,7 +22,7 @@
 
 		/**
 		 * @param {String} name
-		 * @parma {String} value
+		 * @param {String|Number|Boolean} value
 		 * @param {Number} expires
 		 */
 		function setCookie(name, value, expires) {
@@ -102,6 +102,52 @@
 
 			return result;
 
+		}
+
+		/**
+		 * @param {Number} settings
+		 * @param {Function} callback
+		 */
+		function access(settings, callback) {
+			if ( settings & 8 ) {
+
+				callback();
+
+			} else {
+
+				var handleMessage = function(event) {
+					var data = event && event.data;
+					if ( data.substr( 0, 6 ) == vk_window ) {
+						try {
+							data = parseJSON( data.substr( 6 ) );
+						} catch ( e ) {
+							data = null;
+						}
+						if ( data && data[ 0 ] == 'runCallback' ) {
+							clearTimeout( id );
+							data = data[ 1 ];
+							if ( data ) {
+								data = data[ 0 ];
+								if ( data && data[ 0 ] == 'onSettingsChanged' ) {
+									clearTimeout( id );
+									removeEventListener( window, 'message', handleMessage );
+									access( data[ 1 ], callback );
+								}
+							}
+						}
+					}
+				};
+
+				var id = setTimeout( function() {
+					removeEventListener( window, 'message', handleMessage );
+					callback();
+				}, 1e3 );
+
+				addEventListener( window, 'message', handleMessage );
+
+				vk_client( 'showSettingsBox', 8 );
+
+			}
 		}
 
 		/**
@@ -418,7 +464,7 @@
 		function updateVolume(value) {
 			volumeValue = min( max( 0, value ), 1 );
 			volumeProgress.style.width = volumeValue * 100 + '%';
-			volumeHint.textContent = round( volumeValue * 100 ) + '%'
+			volumeHint.textContent = round( volumeValue * 100 ) + '%';
 			if ( audio ) audio.volume = volumeValue;
 			setCookie( 'v', volumeValue, 7 * 24 * 60 * 60 );
 		}
@@ -452,7 +498,7 @@
 			btnNext.disabled = !audio;
 
 			btnPause.disabled =
-			btnResume.disabled = !audio || audio.readyState <= 3
+			btnResume.disabled = !audio || audio.readyState <= 3;
 
 			if ( !btnResume.disabled && audio.paused ) {
 
@@ -611,7 +657,7 @@
 
 				function(id) {
 
-					s._id_ = id;
+					s._id_ = /** @type {Number} */ id;
 					s._owner_id_ = vk_viewer_id;
 
 					if ( s._correct_ ) {
@@ -635,16 +681,24 @@
 
 		/**
 		 * @param {String} method
+		 * @param {...*} arg
+		 */
+		function vk_client(method, arg) {
+			window.parent[ 'postMessage' ]( vk_window + encodeJSON( arguments ) , '*' );
+		}
+
+		/**
+		 * @param {String} method
 		 * @param {?Object=} params
 		 * @param {function(Object)=} success
 		 * @param {function(Error)=} fail
 		 */
 		function vk_query(method, params, success, fail) {
 
+			var callback = 'vk' + generate();
+
 			var i;
 			var data = {};
-
-			var callback = 'c' + generate();
 
 			for ( i in params ) {
 				data[ i ] = params[ i ];
@@ -863,6 +917,8 @@
 			max = Math.max,
 			/** @type {function(String):*} */
 			parseJSON = JSON.parse,
+			/** @type {function(*):String} */
+			encodeJSON = JSON.stringify,
 
 			/** @type {function():Number} */
 			now = Date.now || function() {
@@ -893,9 +949,9 @@
 				}
 			),
 
-			/** @type {function(Element, String, Function)} */
+			/** @type {function(EventTarget, String, Function)} */
 			addEventListener = unbind( documentElement.addEventListener ),
-			/** @type {function(Element, String, Function)} */
+			/** @type {function(EventTarget, String, Function)} */
 			removeEventListener = unbind( documentElement.removeEventListener ),
 			/** @type {function(Element, String):*} */
 			getAttribute = function(e, name) { return e.getAttribute( name ) || '' },
@@ -1186,8 +1242,10 @@
 					var r = [];
 
 					for ( var i = 0; i < 32; i += 8 ) {
-						r.push( chars[ ( n >>> ( i + 4 ) ) & 0x0F ] );
-						r.push( chars[ ( n >>>   i       ) & 0x0F ] );
+						r.push(
+							chars[ ( n >>> ( i + 4 ) ) & 0x0F ],
+							chars[ ( n >>>   i       ) & 0x0F ]
+						);
 					}
 
 					return r.join( '' );
@@ -1306,6 +1364,7 @@
 			lastFM_secret,
 
 			vk_group_id,
+			vk_window,
 
 			/** @type {Song} */
 			song,
@@ -1450,27 +1509,29 @@
 			lastFM_api_url =	parameters[ 'lastFM_api_url' ];
 			lastFM_api_key =	parameters[ 'lastFM_api_key' ];
 
-			try {
+			vk_window =			( window[ 'name' ] || '' ).replace( /^fXD/, '' ) + ':';
 
-				init( parseJSON( parameters[ 'api_result' ] )[ 'response' ] );
+			access( parameters[ 'api_settings' ], function() {
+				try {
 
-			} catch ( e ) {
+					init( parseJSON( parameters[ 'api_result' ] )[ 'response' ] );
 
-				vk_query(
+				} catch ( e ) {
 
-					'execute', { code: 'return[API.audio.get({"owner_id":-' + vk_group_id + '}).items,API.audio.get({"owner_id":' + vk_viewer_id + '}).items];' },
+					vk_query(
 
-					init,
+						'execute', { code: 'return[API.audio.get({"owner_id":-' + vk_group_id + '}).items,API.audio.get({"owner_id":' + vk_viewer_id + '}).items];' },
 
-					function(e) {
+						init,
 
-						// TODO: error
+						function(e) {
+							// TODO: error
+						}
 
-					}
+					);
 
-				);
-
-			}
+				}
+			} );
 
 		}() );
 
