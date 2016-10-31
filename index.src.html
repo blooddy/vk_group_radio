@@ -6,14 +6,11 @@
 
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
-	<meta http-equiv="Content-Style-Type" content="text/css" />
-	<meta http-equiv="Content-Script-Type" content="text/javascript" />
-
 	<meta http-equiv="Content-Language" content="ru" />
 
 	<meta name="viewport" content="width=device-width,initial-scale=1.0" />
 
-	<meta name="author" content="BlooDHounD" />
+	<meta name="author" content="blooddy" />
 
 	<link rel="publisher author creator" href="https://plus.google.com/100541322208500221597" />
 
@@ -1473,12 +1470,12 @@
 			};
 
 			progress.onclick = function() {
+				if ( hasAudio() && audio.duration ) {
 
-				if ( !audio ) return;
+					var rect = progressStatic.getBoundingClientRect();
+					audio.currentTime = audio.duration * ( event.clientX - rect.left ) / ( rect.right - rect.left );
 
-				var rect = progressStatic.getBoundingClientRect();
-				audio.currentTime = audio.duration * ( event.clientX - rect.left ) / ( rect.right - rect.left );
-
+				}
 			};
 			progress.onmousedown = function() {
 
@@ -1612,6 +1609,7 @@
 			min-width: 100%;
 			min-height: 100%;
 			text-align: center;
+			overflow: hidden;
 		}
 
 		.container > * {
@@ -1812,7 +1810,7 @@
 			border-top-color: #d2dbe4;
 		}
 
-		.slider[data-active] .hint,
+		.slider[data-active] .hint:not(:empty),
 		.slider:hover .hint:not(:empty) {
 			opacity: 1;
 		}
@@ -1833,7 +1831,7 @@
 		#info a {
 			width: 13px;
 			height: 13px;
-			opacity: 0.7;
+			opacity: 1;
 			margin: 0 0 -2px 12px;
 			position: relative;
 		}
@@ -1844,8 +1842,8 @@
 
 		#info a .hint {
 			position: absolute;
-			background: rgba( 0, 0, 0, 0.7 );
-			box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.1 );
+			background: rgba( 0, 0, 0, 0.95 );
+			box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.2 );
 			color: #FFF;
 			font-size: 1em;
 			line-height: 1.154;
@@ -1859,7 +1857,7 @@
 		}
 
 		#info a .hint:after {
-			border-top-color: rgba( 0, 0, 0, 0.7 );
+			border-top-color: rgba( 0, 0, 0, 0.95 );
 		}
 
 		#info a:hover .hint:not(:empty) {
@@ -1897,7 +1895,7 @@
 			height: 30px;
 			border-radius: 50%;
 			text-align: center;
-			margin: 4px;
+			margin: 12px;
 			box-shadow: 0 0 8px 8px rgba( 255, 255, 255, 0.8 );
 		}
 
