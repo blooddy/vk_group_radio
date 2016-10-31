@@ -349,23 +349,35 @@
 		function updateSong() {
 
 			if ( !img || !song || getAttribute( img, 'src' ) != song._image_ ) {
+
 				if ( img ) {
-					removeAttribute( img, 'src' );
-					removeChild( img );
+
+					var old = img;
+					old.style.opacity = 0;
+					setTimeout( function() {
+						removeChild( old );
+						removeAttribute( old, 'src' );
+					}, 1e3 );
+
 					img = undefined;
+
 				}
+
 				if ( song && song._image_ ) {
+
 					img = createElement( 'img' );
-					setAttribute( img, 'src', song._image_ );
 					img.style.opacity = 0;
 					img.onload = function() {
 						if ( img == this ) {
-							img.style.opacity = 1;
-							img.style.filter = 'blur(' + max( 0, ( 400 / img.height - 1 ) * 2 ) + 'px)';
 							appendChild( image, img );
+							img.style.filter = 'blur(' + max( 0, ( documentElement.getBoundingClientRect().height / img.height - 1 ) * 2 ) + 'px)';
+							img.style.opacity = 1;
 						}
 					};
+					setAttribute( img, 'src', song._image_ );
+
 				}
+
 			}
 
 			var node;
