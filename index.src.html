@@ -279,6 +279,8 @@
 
 			setAttribute( audio, 'type', 'audio/mp3' );
 			setAttribute( audio, 'src', s._url_ );
+			setAttribute( audio, 'autobuffer', 'autobuffer' );
+			setAttribute( audio, 'preload', 'auto' );
 
 			addEventListener( audio, 'canplay', updateAudioLoading );
 			addEventListener( audio, 'playthrough', updateAudioLoading );
@@ -291,6 +293,7 @@
 
 			appendChild( body, audio );
 
+			audio.load();
 			audio.play();
 
 			update();
