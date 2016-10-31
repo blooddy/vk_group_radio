@@ -141,7 +141,6 @@
 							if ( data ) {
 								data = data[ 0 ];
 								if ( data && data[ 0 ] == 'onSettingsChanged' ) {
-									clearTimeout( id );
 									removeEventListener( window, 'message', handleMessage );
 									access( data[ 1 ], callback );
 								}
@@ -182,7 +181,7 @@
 		 * @returns {Boolean}
 		 */
 		function hasAudio() {
-			return audio && getAttribute( audio, 'src' );
+			return getAttribute( audio, 'src' );
 		}
 
 		/**
@@ -273,25 +272,7 @@
 
 			song = s;
 
-			audio = createElement( 'audio' );
-
-			audio.volume = volumeValue;
-
-			setAttribute( audio, 'type', 'audio/mp3' );
 			setAttribute( audio, 'src', s._url_ );
-			setAttribute( audio, 'autobuffer', 'autobuffer' );
-			setAttribute( audio, 'preload', 'auto' );
-
-			addEventListener( audio, 'canplay', updateAudioLoading );
-			addEventListener( audio, 'playthrough', updateAudioLoading );
-			addEventListener( audio, 'progress', updateAudioBuffer );
-			addEventListener( audio, 'timeupdate', updateAudioProgress );
-			addEventListener( audio, 'pause', updateButtons );
-			addEventListener( audio, 'play', updateButtons );
-			addEventListener( audio, 'error', next );
-			addEventListener( audio, 'ended', next );
-
-			appendChild( body, audio );
 
 			audio.load();
 			audio.play();
@@ -312,22 +293,9 @@
 
 			if ( hasAudio() ) {
 
-				removeChild( audio );
-
-				removeEventListener( audio, 'canplay', updateAudioLoading );
-				removeEventListener( audio, 'playthrough', updateAudioLoading );
-				removeEventListener( audio, 'progress', updateAudioBuffer );
-				removeEventListener( audio, 'timeupdate', updateAudioProgress );
-				removeEventListener( audio, 'pause', updateButtons );
-				removeEventListener( audio, 'play', updateButtons );
-				removeEventListener( audio, 'error', next );
-				removeEventListener( audio, 'ended', next );
-
 				audio.pause();
 
 				removeAttribute( audio, 'src' );
-
-				audio = undefined;
 
 			}
 
@@ -443,7 +411,7 @@
 		/**
 		 */
 		function updateAudioLoading() {
-			progressLoading.style.display = ( !audio || audio.readyState < 3 ? 'block' : 'none' );
+			progressLoading.style.opacity = ( !hasAudio() || audio.readyState < 3 ? 1 : 0 );
 			updateButtons();
 		}
 
@@ -485,11 +453,16 @@
 		/**
 		 */
 		function updateVolume(value) {
+
 			volumeValue = min( max( 0, value ), 1 );
+
 			volumeProgress.style.width = volumeValue * 100 + '%';
 			volumeHint.textContent = round( volumeValue * 100 ) + '%';
-			if ( audio ) audio.volume = volumeValue;
+
+			audio.volume = volumeValue;
+
 			setCookie( 'v', volumeValue, 7 * 24 * 60 * 60 );
+
 		}
 
 		/**
@@ -516,12 +489,14 @@
 		 */
 		function updateButtons() {
 
-			btnPrev.disabled = !audio || prevList.length <= 0;
+			var a = !hasAudio();
 
-			btnNext.disabled = !audio;
+			btnPrev.disabled = a || prevList.length <= 0;
+
+			btnNext.disabled = a;
 
 			btnPause.disabled =
-			btnResume.disabled = !audio || audio.readyState <= 3;
+			btnResume.disabled = a || audio.readyState <= 3;
 
 			if ( !btnResume.disabled && audio.paused ) {
 
@@ -924,8 +899,10 @@
 			/** @type {{ getRandomValues: (function(ArrayBufferView)) }} */
 			crypto = window[ 'crypto' ],
 
-			/** @type {function(Function, Number):Number} */
+			/** @type {function(Function,Number):Number} */
 			setTimeout = window.setTimeout,
+			/** @type {function(Number)} */
+			clearTimeout = window.clearTimeout,
 			/** @type {function(String):String} */
 			encodeURIComponent = window.encodeURIComponent,
 			/** @type {function(String):String} */
@@ -1023,7 +1000,7 @@
 					return replacers[ m ];
 				}
 
-				var chars = {
+				 var chars = {
 
 					'a': 'àáâãäåāăąаӑӓѧѩ',
 					'b': 'б',
@@ -1440,6 +1417,23 @@
 
 		( function() {
 
+			audio = createElement( 'audio' );
+
+			setAttribute( audio, 'type', 'audio/mp3' );
+			setAttribute( audio, 'autobuffer', 'autobuffer' );
+			setAttribute( audio, 'preload', 'auto' );
+
+			addEventListener( audio, 'canplay', updateAudioLoading );
+			addEventListener( audio, 'playthrough', updateAudioLoading );
+			addEventListener( audio, 'progress', updateAudioBuffer );
+			addEventListener( audio, 'timeupdate', updateAudioProgress );
+			addEventListener( audio, 'pause', updateButtons );
+			addEventListener( audio, 'play', updateButtons );
+			addEventListener( audio, 'error', next );
+			addEventListener( audio, 'ended', next );
+
+			appendChild( body, audio );
+
 			updateVolume( getCookie( 'v' ) || 1 );
 
 			volume.onclick = function() {
@@ -1684,6 +1678,7 @@
 		#image > * {
 			width: auto;
 			height: 100%;
+			transition-duration: 1s;
 		}
 
 		#text {
