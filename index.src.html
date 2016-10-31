@@ -1687,6 +1687,7 @@
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+			height: 21px;
 		}
 
 		#text > * {
@@ -1702,6 +1703,7 @@
 			font-weight: 500;
 			max-width: 50%;
 			vertical-align: middle;
+			margin-bottom: 1px;
 		}
 
 		#text a:hover {
@@ -1765,32 +1767,39 @@
 			opacity: 1;
 		}
 
-		.slider .hint {
-			width: 36px;
+		.hint {
 			height: auto;
 			text-align: center;
 			font-size: 11px;
-			color: #4d627d;
 			padding: 4px 6px 3px;
 			pointer-events: none;
-			background: #d2dbe4;
 			border-radius: 2px;
 			margin: -36px -24px 0 0;
 			float: right;
 			opacity: 0;
+			white-space: nowrap;
 		}
 
-		.slider .hint:after {
+		.hint:after {
 			content: "";
 			top: 100%;
 			left: 50%;
 			border: 5px solid transparent;
-			border-top-color: #d2dbe4;
 			height: 0;
 			width: 0;
 			position: absolute;
 			pointer-events: none;
 			margin-left: -5px;
+		}
+
+		.slider .hint {
+			width: 36px;
+			color: #4d627d;
+			background: #d2dbe4;
+		}
+
+		.slider .hint:after {
+			border-top-color: #d2dbe4;
 		}
 
 		.slider[data-active] .hint,
@@ -1807,14 +1816,43 @@
 			display: none;
 		}
 
+		#info {
+			height: 21px;
+		}
+
 		#info a {
 			width: 13px;
 			height: 13px;
 			opacity: 0.7;
 			margin: 0 0 -2px 12px;
+			position: relative;
 		}
 
 		#info a:hover {
+			opacity: 1;
+		}
+
+		#info a .hint {
+			position: absolute;
+			background: rgba( 0, 0, 0, 0.7 );
+			box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.1 );
+			color: #FFF;
+			font-size: 1em;
+			line-height: 1.154;
+			right: 0;
+			margin-top: -30px;
+		}
+
+		#info a .hint:after {
+			left: auto;
+			right: 26px;
+		}
+
+		#info a .hint:after {
+			border-top-color: rgba( 0, 0, 0, 0.7 );
+		}
+
+		#info a:hover .hint:not(:empty) {
 			opacity: 1;
 		}
 
@@ -1825,6 +1863,10 @@
 
 		#add[data-in="true"] {
 			background-position-y: -14px;
+		}
+
+		#add[data-in="true"]:hover .hint {
+			opacity: 0;
 		}
 
 		#download {
@@ -1897,7 +1939,7 @@
 						<tr>
 							<td class="left" id="text"></td>
 							<td class="right" id="info">
-								<a id="download" download="download"></a><a id="add"></a><time id="time"></time>
+								<a id="download" download="download"><span class="hint">Скачать</span></a><a id="add"><span class="hint">Добавить в Мои Аудиозаписи</span></a><time id="time"></time>
 							</td>
 						</tr>
 						<tr>
