@@ -186,12 +186,12 @@
 		function next() {
 
 			if ( song ) {
-				prevList.push( song );
+				push( prevList, song );
 			}
 
 			if ( nextList.length ) {
 
-				play( nextList.pop() );
+				play( pop( nextList ) );
 
 			} else {
 
@@ -210,7 +210,7 @@
 
 						var list = [];
 						for ( i in nextHash ) {
-							list.push( nextHash[ i ] );
+							push( list, nextHash[ i ] );
 						}
 
 						if ( list.length > 0 ) {
@@ -230,7 +230,7 @@
 						prevHash = {};
 					}
 
-					nextList.push( s );
+					push( nextList, s );
 
 					next();
 
@@ -245,12 +245,12 @@
 		function prev() {
 
 			if ( song ) {
-				nextList.push( song );
+				push( nextList, song );
 			}
 
 			if ( prevList.length > 0 ) {
 
-				play( prevList.pop() );
+				play( pop( prevList ) );
 
 			} else {
 
@@ -314,6 +314,8 @@
 			}
 		}
 
+		/**
+		 */
 		function resume() {
 			if ( hasAudio() ) {
 				if ( audio.paused ) {
@@ -322,6 +324,20 @@
 			} else {
 				next();
 			}
+		}
+
+		/**
+		 */
+		function add() {
+
+			if ( !song || song._key_ in userHash ) return;
+
+			btnAdd.disabled = true;
+			queryAdd( song, function(s) {
+				btnAdd.disabled = false;
+				updateAdd();
+			} );
+
 		}
 
 		/**
@@ -461,21 +477,6 @@
 
 		/**
 		 */
-		function updateVolume(value) {
-
-			volumeValue = min( max( 0, value ), 1 );
-
-			volumeProgress.style.width = volumeValue * 100 + '%';
-			volumeHint.textContent = round( volumeValue * 100 ) + '%';
-
-			audio.volume = volumeValue;
-
-			setCookie( 'v', volumeValue, 7 * 24 * 60 * 60 );
-
-		}
-
-		/**
-		 */
 		function updateDownload() {
 			if ( song ) {
 				setAttribute( btnDownload, 'href', song._url_ );
@@ -583,11 +584,11 @@
 					'mega':			4
 				};
 
-				list.sort( function(a, b) {
+				sort( list, function(a, b) {
 					return ( ( SIZE[ a[ 'size' ] ] || 0 ) > ( SIZE[ b[ 'size' ] ] || 0 ) ? 1: -1 );
 				} );
 
-				return list.pop()[ '#text' ];
+				return pop( list )[ '#text' ];
 
 			} else {
 				return undefined;
@@ -692,7 +693,7 @@
 		 */
 		function vk_client(method, args) {
 			args = slice( arguments );
-			method = args.shift();
+			method = shift( args );
 			window.parent[ 'postMessage' ]( vk_window + encodeJSON( [ method, args ] ), '*' );
 		}
 
@@ -724,12 +725,12 @@
 
 			var args = [];
 			for ( i in data ) {
-				args.push( encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
+				push( args, encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
 			}
 
 			var script = createElement( 'script' );
 			setAttribute( script, 'async', 'async' );
-			setAttribute( script, 'src', vk_api_url + '?' + args.join( '&' ) );
+			setAttribute( script, 'src', vk_api_url + '?' + join( args, '&' ) );
 			appendChild( head, script );
 
 			script.onerror = function() {
@@ -748,7 +749,7 @@
 
 					if ( result ) result = result[ 'error' ];
 
-					var e = Error( result && typeof result == 'object' && result[ 'error_msg' ] );
+					var e = Error( ( result && typeof result == 'object' && result[ 'error_msg' ] ) || result );
 
 					switch ( result && result[ 'error_code' ] ) {
 
@@ -779,13 +780,13 @@
 
 			var arr = [];
 			for ( var i in data ) {
-				arr.push( i + '=' + data[ i ] );
+				push( arr, i + '=' + data[ i ] );
 			}
-			arr.sort();
+			sort( arr );
 
 			return md5(
 				( vk_viewer_id > 0 ? vk_viewer_id : '' ) +
-				arr.join( '' ) +
+				join( arr, '' ) +
 				vk_secret
 			);
 
@@ -823,11 +824,11 @@
 
 			var args = [];
 			for ( i in data ) {
-				args.push( encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
+				push( args, encodeURIComponent( i ) + '=' + encodeURIComponent( data[ i ] ) );
 			}
 
 			var	xhr = new XMLHttpRequest();
-			xhr.open( 'GET', lastFM_api_url + '?' + args.join( '&' ), true );
+			xhr.open( 'GET', lastFM_api_url + '?' + join( args, '&' ), true );
 			xhr.send();
 
 			if ( xhr.overrideMimeType ) xhr.overrideMimeType( 'application/json' );
@@ -839,7 +840,7 @@
 
 					if ( !result || result[ 'error' ] ) {
 
-						var e = Error( result && typeof result == 'object' && result[ 'message' ] );
+						var e = Error( ( result && typeof result == 'object' && result[ 'message' ] ) || result );
 
 						switch ( result[ 'error' ] ) {
 
@@ -881,11 +882,11 @@
 
 			var arr = [];
 			for ( var i in data ) {
-				arr.push( i + data[ i ] );
+				push( arr, i + data[ i ] );
 			}
-			arr.sort();
+			sort( arr );
 
-			return md5( arr.join( '' ) + lastFM_secret );
+			return md5( join( arr, '' ) + lastFM_secret );
 
 		}
 
@@ -961,8 +962,18 @@
 				}
 			),
 
-			/** @type {function(Object,Number=,Number=):Array} */
+			/** @type {function(Object, Number=, Number=):Array} */
 			slice = unbind( ArrayPrototype.slice ),
+			/** @type {function(Object, ...*):Number} */
+			push = unbind( ArrayPrototype.push ),
+			/** @type {function(Object):*} */
+			pop = unbind( ArrayPrototype.pop ),
+			/** @type {function(Object):*} */
+			shift = unbind( ArrayPrototype.shift ),
+			/** @type {function(Object, String):String} */
+			join = unbind( ArrayPrototype.join ),
+			/** @type {function(Object, function(*,*):Number=):Array} */
+			sort = unbind( ArrayPrototype.sort ),
 
 			/** @type {function(EventTarget, String, Function)} */
 			addEventListener = unbind( documentElement.addEventListener ),
@@ -1257,13 +1268,10 @@
 					var r = [];
 
 					for ( var i = 0; i < 32; i += 8 ) {
-						r.push(
-							chars[ ( n >>> ( i + 4 ) ) & 0x0F ],
-							chars[ ( n >>>   i       ) & 0x0F ]
-						);
+						push( r, chars[ ( n >>> ( i + 4 ) ) & 0x0F ], chars[ ( n >>>   i       ) & 0x0F ] );
 					}
 
-					return r.join( '' );
+					return join( r, '' );
 
 				}
 
@@ -1426,6 +1434,43 @@
 
 		( function() {
 
+			/**
+			 * @param {Number} value
+			 */
+			function updateVolume(value) {
+
+				if ( value == undefined ) {
+					var rect = volumeStatic.getBoundingClientRect();
+					value = min( max( 0, ( event.clientX - rect.left ) / ( rect.right - rect.left ) ), 1 );
+				}
+
+				volumeValue = value;
+
+				volumeProgress.style.width = value * 100 + '%';
+				volumeHint.textContent = round( value * 100 ) + '%';
+
+				audio.volume = value;
+
+				setCookie( 'v', value, 7 * 24 * 60 * 60 );
+
+			}
+
+			/**
+			 * @param {Number} value
+			 */
+			function updateProgress(value) {
+				if ( hasAudio() && audio.duration ) {
+
+					if ( value == undefined ) {
+						var rect = progressStatic.getBoundingClientRect();
+						value = audio.duration * ( event.clientX - rect.left ) / ( rect.right - rect.left );
+					}
+
+					audio.currentTime = value;
+
+				}
+			}
+
 			audio = createElement( 'audio' );
 
 			setAttribute( audio, 'type', 'audio/mp3' );
@@ -1445,23 +1490,18 @@
 
 			updateVolume( getCookie( 'v' ) || 1 );
 
-			volume.onclick = function() {
-
-				var rect = volumeStatic.getBoundingClientRect();
-				updateVolume( ( event.clientX - rect.left ) / ( rect.right - rect.left ) );
-
-			};
+			volume.onclick = updateVolume;
 			volume.onmousedown = function() {
 
 				setAttribute( volume, 'data-active', true );
 
-				volume.onclick();
+				updateVolume();
 
-				addEventListener( documentElement, 'mousemove', volume.onclick );
+				addEventListener( documentElement, 'mousemove', updateVolume );
 				addEventListener( documentElement, 'mouseup', function mouseup() {
 
 					removeEventListener( documentElement, 'mouseup', mouseup );
-					removeEventListener( documentElement, 'mousemove', volume.onclick );
+					removeEventListener( documentElement, 'mousemove', updateVolume );
 
 					removeAttribute( volume, 'data-active' );
 
@@ -1469,38 +1509,19 @@
 
 			};
 
-			progress.onclick = function() {
-				if ( hasAudio() && audio.duration ) {
-
-					var rect = progressStatic.getBoundingClientRect();
-					audio.currentTime = audio.duration * ( event.clientX - rect.left ) / ( rect.right - rect.left );
-
-				}
-			};
+			progress.onclick = updateProgress;
 			progress.onmousedown = function() {
 
 				setAttribute( progress, 'data-active', true );
 
-				addEventListener( documentElement, 'mousemove', progress.onclick );
+				addEventListener( documentElement, 'mousemove', updateProgress );
 				addEventListener( documentElement, 'mouseup', function mouseup() {
 
 					removeEventListener( documentElement, 'mouseup', mouseup );
-					removeEventListener( documentElement, 'mousemove', progress.onclick );
+					removeEventListener( documentElement, 'mousemove', updateProgress );
 
 					removeAttribute( progress, 'data-active' );
 
-				} );
-
-			};
-
-			btnAdd.onclick = function() {
-
-				if ( !song || song._key_ in userHash ) return;
-
-				btnAdd.disabled = true;
-				queryAdd( song, function(s) {
-					btnAdd.disabled = false;
-					updateAdd();
 				} );
 
 			};
@@ -1509,6 +1530,7 @@
 			btnPause.onclick = pause;
 			btnResume.onclick = resume;
 			btnNext.onclick = next;
+			btnAdd.onclick = add;
 
 			update();
 
@@ -1566,7 +1588,7 @@
 			var q = [];
 
 			var ga = function() {
-				q.push( arguments );
+				push( q, arguments );
 			};
 
 			var script = createElement( 'script' );
